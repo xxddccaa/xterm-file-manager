@@ -5,9 +5,107 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 ## Features
 
 - **SSH Connection Management**: Automatically reads and parses `~/.ssh/config` file
-- **Integrated File Manager**: SFTP file browser (coming soon)
+- **Integrated File Manager**: Three-pane layout with SFTP file browser
+  - Remote Files: Browse and manage files on SSH servers via SFTP
+  - Local Files: Browse and manage local filesystem
+  - Drag & drop file transfer between remote and local
+- **File Operations**: 
+  - **Double-click to edit**: Open any file in built-in code editor
+  - **F2 to rename**: Quick rename for files and directories
+  - Right-click context menu: Edit, Download, Upload, Delete, Rename
 - **Modern Terminal**: Based on xterm.js with full terminal emulation
+- **Clipboard Support**: Cmd+C/V copy-paste, select-to-copy, right-click-paste
+- **File Editor**: Multi-tab file editor with Notepad++-like features
+  - **Drag & Drop**: Drag files from Finder/Explorer to open
+  - **Multi-tab Interface**: Edit multiple files simultaneously
+  - **Smart Tab Labels**: Long filename truncation with full path tooltip on hover
+  - **Auto-save Location**: Files saved to ~/Documents/XTermFileManager by default
+  - **Smart Naming**: Auto-increment (Untitled.txt, Untitled-1.txt, Untitled-2.txt...)
+  - **Syntax Highlighting**: Support for 30+ programming languages via Monaco Editor
+  - **Unsaved Changes Warning**: Visual indicator and confirmation dialog
+- **Developer Tools**: Professional tools for developers
+  - **JSON Formatter**: Tree view with expand/collapse, syntax highlighting (like json.cn)
+  - **C Formatter**: Auto-format with configurable indent size
+  - **Escape Tool**: Auto-convert escape sequences with toggle mode
+- **Keyboard Shortcuts**: 
+  - Ctrl+C: Copy (with selection) or interrupt (without selection)
+  - Ctrl+D: Send EOF signal
+  - F2: Rename selected file/directory
+- **Preferences Menu**: Application menu with terminal settings (Preferences > Terminal)
 - **Lightweight**: Built with Go + Wails, much lighter than Electron
+
+## Changelog
+
+### v2.22.1 - Editor UI Optimization (2026-02-06)
+
+- **Tab Label UX Improvements**:
+  - Smart filename truncation for long filenames (max 120px)
+  - Full path tooltip on hover for easy identification
+  - Fixed drag-and-drop overlay not clearing after file drop
+- **Drag & Drop Refinements**:
+  - Switched to Wails native `OnFileDrop` API for reliable file path handling
+  - Added safety timeout (3s) to auto-clear drag overlay
+  - Fixed WebView drag-and-drop integration with `DragAndDrop: true` flag
+
+### v2.22 - File Editor Tab (2026-02-06)
+
+- **New Editor Tab**: Multi-tab file editor with Notepad++-like capabilities
+  - Drag & drop files from system to open
+  - Create new files with auto-naming (Untitled.txt, Untitled-1.txt, etc.)
+  - Default save location: ~/Documents/XTermFileManager
+  - Open File button with file type filters
+  - Monaco Editor with syntax highlighting for 30+ languages
+  - Cmd+S keyboard shortcut for saving
+  - Unsaved changes indicator and warning dialog
+- **Backend APIs**: CreateLocalFile, GetDefaultEditorDirectory, GetNextUntitledFileName, OpenFileDialog
+- **Wails Integration**: OnFileDrop API for reliable drag-and-drop support
+
+### v2.22 - Enhanced Tools Tab (2026-02-06)
+
+- **JSON Formatter**: Complete rewrite with tree view
+  - Tree view with expand/collapse (+/- buttons) like json.cn
+  - Syntax highlighting for keys, strings, numbers, booleans, null
+  - Preview mode showing item counts when collapsed
+  - Auto-format on input
+  - Toggle between tree view and text view
+- **C Formatter**: Enhanced with auto-format
+  - Auto-format on input (no button needed)
+  - Configurable indent size (2-8 spaces)
+  - Better operator spacing and brace handling
+- **Escape Tool**: Improved UX
+  - Auto-convert on input
+  - Toggle mode button for quick switching
+  - Enhanced swap functionality (bidirectional)
+  - More escape sequences (\\b, \\f, \\v)
+  - Improved help documentation layout
+
+### v2.21 - Project Structure Reorganization (2026-02-06)
+
+- **Go code reorganization**: Moved all business logic to `internal/app/` package
+- **Cleaner root directory**: Only `main.go` remains in project root
+- **Standard Go layout**: Follows Go community best practices with `internal/` directory
+- **Modular package structure**: Business code in `app` package, main only handles initialization
+- **Updated Wails bindings**: Auto-generated bindings now in `frontend/wailsjs/go/app/`
+- **Documentation organized**: All docs in `docs/`, scripts in `scripts/`
+
+### v2.18 - File Operations Enhancement (2026-02-06)
+
+- **Double-click to edit files**: Double-click any file (local or remote) to open in code editor
+- **F2 rename shortcut**: Press F2 to rename selected files/directories
+- **Context menu rename**: Added "Rename" option to right-click menu
+- **Backend APIs**: Added `RenameRemoteFile()` and `RenameLocalFile()` functions
+- **Keyboard shortcuts**: Verified Ctrl+C and Ctrl+D work correctly in terminal
+- **User experience**: Seamless file editing and renaming workflow
+
+### v2.10 - Build System, Display, Clipboard & Menu Fixes
+
+- **Fixed wails.json**: Converted to flat colon-separated key format (`"frontend:install"`, `"frontend:build"`, `"frontend:dev:serverUrl"`) — the old nested format was silently ignored by Wails CLI, causing "No Install command" and the Vite dev server not starting
+- **Fixed main.go assets**: Simplified asset server config — removed placeholder fallback, rely on Wails to handle dev/prod modes correctly via `wails.json`
+- **Fixed clipboard**: Added standard macOS Edit menu (Copy/Paste/SelectAll) — required for Cmd+C/V to work in WebView
+- **Fixed terminal borders**: Added `ResizeObserver` so the terminal reflows correctly when the container resizes (sidebar toggle, tab switch, layout changes)
+- **Fixed server colors**: Overrode Ant Design's default dark text to light colors in the server list for dark theme visibility
+- **Fixed menu structure**: Added standard macOS menus (App, Edit, Window) alongside the Preferences menu
+- **Improved resize**: Debounced terminal resize to prevent rapid-fire calls; only process `keydown` events in keyboard handler to prevent double-fire
 
 ## Installation
 
@@ -76,15 +174,44 @@ After removing the quarantine attribute, you can:
 go mod download
 
 # Install frontend dependencies
-cd frontend
-npm install
-cd ..
+cd frontend && npm install && cd ..
 
-# Run in development mode
+# Run in development mode (starts Vite + Go app automatically)
 wails dev
 ```
 
-### Build
+### Development Mode (`wails dev`)
+
+`wails dev` handles everything automatically:
+1. Installs frontend dependencies (`npm install`)
+2. Starts the Vite dev server with hot-reload
+3. Compiles and runs the Go backend
+4. Opens the app window loading from Vite
+
+You just need to run `wails dev` — no manual frontend build needed.
+
+### Clean Cache
+
+If the UI is not updating after changes:
+
+```bash
+# Clean Vite cache and restart
+cd frontend && rm -rf node_modules/.vite .vite && cd ..
+wails dev
+```
+
+If that doesn't help, do a full clean:
+
+```bash
+# Full clean rebuild
+rm -rf frontend/dist/assets frontend/dist/*.html frontend/dist/*.js
+cd frontend && rm -rf node_modules/.vite .vite && npm install && cd ..
+wails dev
+```
+
+> **Note**: Do NOT delete the entire `frontend/dist/` directory — it contains a `gitkeep` file needed by Go's `//go:embed` directive. Only delete the build outputs inside it.
+
+### Production Build
 
 ```bash
 # Build for current platform
@@ -92,21 +219,51 @@ wails build
 
 # Build for specific platform
 wails build -platform darwin/amd64
+wails build -platform darwin/arm64
 wails build -platform windows/amd64
 wails build -platform linux/amd64
 ```
+
+`wails build` automatically runs `npm install` + `npm run build` before compiling, so the production binary contains all frontend assets embedded.
 
 ## Project Structure
 
 ```
 xterm-file-manager/
-├── main.go          # Application entry point
-├── app.go           # App struct and lifecycle
-├── ssh.go           # SSH config parser
-├── frontend/        # React frontend
+├── main.go                    # Application entry point
+├── internal/
+│   └── app/                   # Business logic (package app)
+│       ├── app.go             # App struct, settings, lifecycle
+│       ├── ssh.go             # SSH config parser (~/.ssh/config)
+│       ├── ssh_manager.go     # SSH connection pool management
+│       ├── websocket_handler.go  # Terminal PTY I/O (SSH + local)
+│       └── local_files.go     # File operations (local + SFTP)
+├── frontend/                  # React frontend
 │   ├── src/
+│   │   ├── components/
+│   │   │   ├── terminal/      # Terminal components
+│   │   │   ├── file-manager/  # File manager components
+│   │   │   ├── editor/        # Code editor
+│   │   │   ├── session/       # Session management
+│   │   │   └── tools/         # Utility tools
+│   │   └── main.tsx
+│   ├── wailsjs/               # Auto-generated Wails bindings
+│   │   └── go/app/            # Go -> JS bindings
 │   └── package.json
-└── go.mod
+├── docs/                      # Documentation
+│   ├── QUICKSTART.md
+│   ├── RELEASE.md
+│   ├── RUN.md
+│   ├── 工程总结.md
+│   └── ...
+├── scripts/                   # Scripts and configs
+│   ├── karabiner-config.json
+│   └── test-keyboard.sh
+├── build/                     # Build resources
+│   ├── appicon.png
+│   └── bin/                   # Build output
+├── go.mod
+└── wails.json                 # Wails configuration
 ```
 
 ## License
