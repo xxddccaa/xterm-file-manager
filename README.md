@@ -16,13 +16,35 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 1. Download `xterm-file-manager-darwin-arm64.zip` from [Releases](https://github.com/xxddccaa/xterm-file-manager/releases)
 2. Extract the ZIP file
 3. You'll get `xterm-file-manager-darwin-arm64.app`
-4. **First time setup**: Right-click the `.app` file and select "Open", then click "Open" in the security dialog (macOS may block unsigned apps on first launch)
-5. Drag the app to your Applications folder (optional)
+
+**Important - Fix "App is damaged" error:**
+
+If you see "xterm-file-manager-darwin-arm64 is damaged and can't be opened", this is macOS Gatekeeper blocking unsigned apps. Fix it by running in Terminal:
+
+```bash
+# Remove quarantine attribute
+xattr -cr xterm-file-manager-darwin-arm64.app
+
+# Then open the app
+open xterm-file-manager-darwin-arm64.app
+```
+
+Or manually:
+1. Right-click the `.app` file
+2. Select "Open"
+3. Click "Open" in the security dialog
+
+4. Drag the app to your Applications folder (optional)
 
 ### macOS (Intel)
 
 1. Download `xterm-file-manager-darwin-amd64.zip` from [Releases](https://github.com/xxddccaa/xterm-file-manager/releases)
-2. Follow the same steps as above
+2. Extract the ZIP file to get `xterm-file-manager-darwin-amd64.app`
+3. **If you see "App is damaged" error**, run in Terminal:
+   ```bash
+   xattr -cr xterm-file-manager-darwin-amd64.app
+   open xterm-file-manager-darwin-amd64.app
+   ```
 
 ### Windows
 
