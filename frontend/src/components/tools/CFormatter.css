@@ -1,0 +1,97 @@
+.c-formatter {
+  width: 100%;
+  height: 100%;
+}
+
+.formatter-card {
+  background: #262626;
+  border: 1px solid #303030;
+  height: 100%;
+}
+
+.formatter-card .ant-card-head {
+  background: #1e1e1e;
+  border-bottom: 1px solid #303030;
+}
+
+.formatter-card .ant-card-head-title {
+  color: #ffffff;
+}
+
+.formatter-card .ant-card-body {
+  height: calc(100% - 57px);
+  display: flex;
+  flex-direction: column;
+}
+
+.formatter-controls {
+  margin-bottom: 16px;
+}
+
+.formatter-content {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.formatter-input,
+.formatter-output {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.formatter-label {
+  color: #ffffff;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.formatter-textarea {
+  flex: 1;
+  background: #1e1e1e;
+  border: 1px solid #303030;
+  color: #ffffff;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  resize: none;
+}
+
+.formatter-textarea::placeholder {
+  color: #666;
+}
+
+.formatter-textarea:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.formatter-textarea-output {
+  background: #1a1a1a;
+}
+
+.indent-label {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.indent-input {
+  width: 80px;
+}
+
+.indent-input .ant-input-number-input {
+  background: #1e1e1e;
+  color: #ffffff;
+  border-color: #303030;
+}
+
+.indent-input:hover .ant-input-number-input {
+  border-color: #1890ff;
+}
+
+@media (max-width: 1200px) {
+  .formatter-content {
+    flex-direction: column;
+  }
+}

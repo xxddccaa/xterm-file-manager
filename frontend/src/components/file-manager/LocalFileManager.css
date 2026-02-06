@@ -1,0 +1,219 @@
+.local-file-manager {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #2a2a2a;
+  position: relative;
+}
+
+.local-file-manager.drag-over {
+  border: 2px dashed #1890ff;
+}
+
+.local-file-manager .path-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #252525;
+  border-bottom: 1px solid #3d3d3d;
+  flex-shrink: 0;
+}
+
+.local-file-manager .path-display {
+  flex: 1;
+  padding: 3px 8px;
+  background: #1e1e1e;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 12px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 20px;
+}
+
+.local-file-manager .path-display:hover {
+  border-color: #1890ff;
+  background: #252525;
+}
+
+.local-file-manager .path-input {
+  flex: 1;
+  font-size: 12px;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.local-file-manager .file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.local-file-manager .file-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.local-file-manager .file-item.selected {
+  background: rgba(24, 144, 255, 0.15);
+  border: 1px solid rgba(24, 144, 255, 0.3);
+  padding: 4px 9px;
+}
+
+.local-file-manager .file-item.directory {
+  color: #e0e0e0;
+}
+
+.local-file-manager .file-item.file {
+  color: #c0c0c0;
+}
+
+.local-file-manager .file-icon-wrapper {
+  font-size: 15px;
+  flex-shrink: 0;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.local-file-manager .icon-folder {
+  color: #e8a838;
+}
+
+.local-file-manager .icon-file {
+  color: #888;
+}
+
+.local-file-manager .file-name-text {
+  flex: 1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-file-manager .file-name-input {
+  flex: 1;
+  font-size: 12px;
+  background: #1a1a1a;
+  border: 1px solid #1890ff;
+  border-radius: 3px;
+  color: #e0e0e0;
+  padding: 1px 4px;
+  outline: none;
+  font-family: inherit;
+  min-width: 0;
+  height: 22px;
+  box-sizing: border-box;
+}
+
+.local-file-manager .file-size-text {
+  font-size: 11px;
+  color: #777;
+  min-width: 60px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.file-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  font-size: 13px;
+  padding: 30px;
+}
+
+.local-file-manager .drop-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(24, 144, 255, 0.08);
+  border: 2px dashed #1890ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #1890ff;
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Context menu */
+.local-file-manager .context-menu {
+  position: fixed;
+  background: #2d2d2d;
+  border: 1px solid #4d4d4d;
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  animation: contextMenuFadeIn 0.12s ease-out;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.local-file-manager .context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.local-file-manager .context-menu-item:hover {
+  background: rgba(24, 144, 255, 0.15);
+  color: #1890ff;
+}
+
+.local-file-manager .context-menu-item .anticon {
+  font-size: 14px;
+}
+
+.local-file-manager .context-menu-divider {
+  height: 1px;
+  background: #4d4d4d;
+  margin: 4px 0;
+}
+
+.local-file-manager .context-menu-item.danger {
+  color: #ff4d4f;
+}
+
+.local-file-manager .context-menu-item.danger:hover {
+  background: rgba(255, 77, 79, 0.15);
+  color: #ff7875;
+}

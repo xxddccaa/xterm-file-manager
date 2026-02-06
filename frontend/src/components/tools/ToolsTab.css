@@ -1,0 +1,42 @@
+.tools-tab-container {
+  height: 100%;
+  background: #1e1e1e;
+}
+
+.tools-sidebar {
+  background: #141414 !important;
+  border-right: 1px solid #303030;
+}
+
+.tools-menu {
+  background: #141414;
+  border-right: none;
+  height: 100%;
+}
+
+.tools-menu .ant-menu-item {
+  color: #888;
+  margin: 4px 8px;
+  border-radius: 4px;
+}
+
+.tools-menu .ant-menu-item:hover {
+  background: #262626;
+  color: #ffffff;
+}
+
+.tools-menu .ant-menu-item-selected {
+  background: #1890ff;
+  color: #ffffff;
+}
+
+.tools-menu .ant-menu-item-selected::after {
+  display: none;
+}
+
+.tools-content {
+  padding: 24px;
+  background: #1e1e1e;
+  overflow: auto;
+  height: 100%;
+}

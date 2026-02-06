@@ -1,6 +1,9 @@
+opencode.json
+
 # Build outputs
 build/bin/
 xterm-file-manager
+vite
 *.exe
 *.dmg
 *.app

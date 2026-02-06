@@ -2,21 +2,11 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "xterm-file-manager",
   "outputfilename": "xterm-file-manager",
-  "frontend": {
-    "dir": "./frontend",
-    "install": "npm install",
-    "build": "npm run build",
-    "dev": "npm run dev",
-    "devServer": "http://localhost:5173",
-    "devServerTimeout": 60000,
-    "watcher": {
-      "include": [
-        "**/*.tsx",
-        "**/*.ts",
-        "**/*.css"
-      ]
-    }
-  },
+  "frontend:dir": "./frontend",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
   "author": {
     "name": "XTerm File Manager",
     "email": ""

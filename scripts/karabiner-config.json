@@ -1,0 +1,98 @@
+{
+  "title": "XTerm File Manager - Allow all shortcuts",
+  "rules": [
+    {
+      "description": "Allow Ctrl+C, Ctrl+D, Ctrl+V and F2 for XTerm File Manager",
+      "manipulators": [
+        {
+          "type": "basic",
+          "conditions": [
+            {
+              "type": "frontmost_application_if",
+              "bundle_identifiers": [
+                "^com\\.wails\\.xterm-file-manager$"
+              ]
+            }
+          ],
+          "from": {
+            "key_code": "c",
+            "modifiers": {
+              "mandatory": ["control"]
+            }
+          },
+          "to": [
+            {
+              "key_code": "c",
+              "modifiers": ["control"]
+            }
+          ]
+        },
+        {
+          "type": "basic",
+          "conditions": [
+            {
+              "type": "frontmost_application_if",
+              "bundle_identifiers": [
+                "^com\\.wails\\.xterm-file-manager$"
+              ]
+            }
+          ],
+          "from": {
+            "key_code": "d",
+            "modifiers": {
+              "mandatory": ["control"]
+            }
+          },
+          "to": [
+            {
+              "key_code": "d",
+              "modifiers": ["control"]
+            }
+          ]
+        },
+        {
+          "type": "basic",
+          "conditions": [
+            {
+              "type": "frontmost_application_if",
+              "bundle_identifiers": [
+                "^com\\.wails\\.xterm-file-manager$"
+              ]
+            }
+          ],
+          "from": {
+            "key_code": "v",
+            "modifiers": {
+              "mandatory": ["control"]
+            }
+          },
+          "to": [
+            {
+              "key_code": "v",
+              "modifiers": ["control"]
+            }
+          ]
+        },
+        {
+          "type": "basic",
+          "conditions": [
+            {
+              "type": "frontmost_application_if",
+              "bundle_identifiers": [
+                "^com\\.wails\\.xterm-file-manager$"
+              ]
+            }
+          ],
+          "from": {
+            "key_code": "f2"
+          },
+          "to": [
+            {
+              "key_code": "f2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

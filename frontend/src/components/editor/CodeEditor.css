@@ -1,0 +1,211 @@
+/* ===== Floating Panel (independent window) ===== */
+
+.floating-panel {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  border: 1px solid #555;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+/* ===== Title bar ===== */
+
+.floating-panel-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 8px 0 14px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #404040;
+  cursor: grab;
+  user-select: none;
+}
+
+.floating-panel-titlebar:active {
+  cursor: grabbing;
+}
+
+.floating-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-filename {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-modified-dot {
+  color: #1890ff;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.editor-filepath {
+  font-size: 11px;
+  color: #888;
+  font-family: 'Monaco', 'Menlo', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.floating-panel-btn {
+  color: #aaa !important;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.floating-panel-btn:hover {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.floating-panel-close:hover {
+  color: #fff !important;
+  background: #e81123 !important;
+}
+
+/* ===== Editor body ===== */
+
+.floating-panel-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.editor-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+}
+
+.editor-loading p {
+  color: #888;
+  margin: 0;
+}
+
+/* ===== Status bar ===== */
+
+.floating-panel-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 12px;
+  background: #007acc;
+  font-size: 11px;
+  color: #fff;
+  user-select: none;
+}
+
+.statusbar-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.statusbar-lang {
+  text-transform: capitalize;
+}
+
+/* ===== Resize handles ===== */
+
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+}
+
+.resize-n {
+  top: -3px;
+  left: 8px;
+  right: 8px;
+  height: 6px;
+  cursor: n-resize;
+}
+
+.resize-s {
+  bottom: -3px;
+  left: 8px;
+  right: 8px;
+  height: 6px;
+  cursor: s-resize;
+}
+
+.resize-e {
+  top: 8px;
+  right: -3px;
+  bottom: 8px;
+  width: 6px;
+  cursor: e-resize;
+}
+
+.resize-w {
+  top: 8px;
+  left: -3px;
+  bottom: 8px;
+  width: 6px;
+  cursor: w-resize;
+}
+
+.resize-ne {
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: ne-resize;
+}
+
+.resize-nw {
+  top: -3px;
+  left: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: nw-resize;
+}
+
+.resize-se {
+  bottom: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: se-resize;
+}
+
+.resize-sw {
+  bottom: -3px;
+  left: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: sw-resize;
+}

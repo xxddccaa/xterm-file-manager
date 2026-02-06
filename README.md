@@ -10,7 +10,7 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
   - Local Files: Browse and manage local filesystem
   - Drag & drop file transfer between remote and local
 - **File Operations**: 
-  - **Double-click to edit**: Open any file in built-in code editor
+  - **Double-click to edit**: Open files in floating independent editor window
   - **F2 to rename**: Quick rename for files and directories
   - Right-click context menu: Edit, Download, Upload, Delete, Rename
 - **Modern Terminal**: Based on xterm.js with full terminal emulation
@@ -35,6 +35,34 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 - **Lightweight**: Built with Go + Wails, much lighter than Electron
 
 ## Changelog
+
+### v2.24 - macOS Dock Menu Integration (2026-02-06)
+
+- **Custom Dock Menu**: Right-click app icon in Dock shows all open editor windows
+  - Dynamic window list updated in real-time as editors open/close
+  - Click any window title to bring it to front
+  - Current active window marked with checkmark (✓)
+  - "Show All Editor Windows" command to bring all editors forward at once
+  - Implemented via Objective-C Runtime (`class_addMethod`) injecting into Wails delegate
+- **Window Menu Integration**: All editor windows appear in macOS menu bar Window menu
+  - Auto-added via `addWindowsItem:` when editor opens
+  - Auto-removed via delegate when editor closes
+- **Fixed CGo Memory Management**: Eliminated use-after-free crash in async dispatch blocks
+  - Synchronous NSString conversion before async operations
+  - Proper strong references for all NSWindow instances
+  - Clean delegate-based lifecycle management
+
+### v2.23 - Native Independent Editor Window (2026-02-06)
+
+- **Native macOS Independent Editor Window**: Double-click file opens in a real OS-level native window
+  - CGo + NSWindow + WKWebView: True native macOS window, not a browser tab
+  - Completely independent from Wails main window — interact with terminal and editor simultaneously
+  - Copy from terminal → paste into editor freely between windows
+  - Go backend HTTP server (127.0.0.1 only) serves Monaco Editor page
+  - Dark theme matching VS Code, syntax highlighting for 30+ languages
+  - Cmd+S to save, unsaved changes warning on close
+  - Fallback textarea if Monaco CDN unavailable
+  - Supports both remote (SFTP) and local file editing
 
 ### v2.22.1 - Editor UI Optimization (2026-02-06)
 
@@ -237,7 +265,9 @@ xterm-file-manager/
 │       ├── ssh.go             # SSH config parser (~/.ssh/config)
 │       ├── ssh_manager.go     # SSH connection pool management
 │       ├── websocket_handler.go  # Terminal PTY I/O (SSH + local)
-│       └── local_files.go     # File operations (local + SFTP)
+│       ├── local_files.go     # File operations (local + SFTP)
+│       ├── editor_server.go   # HTTP server for standalone editor
+│       └── editor_window_darwin.go  # Native macOS window (CGo)
 ├── frontend/                  # React frontend
 │   ├── src/
 │   │   ├── components/
