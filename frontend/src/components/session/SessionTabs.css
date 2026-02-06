@@ -1,0 +1,74 @@
+.session-tabs-container {
+  background: #1e1e1e;
+  border-bottom: 1px solid #2d2d2d;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.session-tabs-container .ant-tabs {
+  width: 100%;
+}
+
+.session-tabs-container .ant-tabs-content-holder {
+  display: none;
+}
+
+.session-tabs-container .ant-tabs-nav {
+  margin: 0;
+  padding: 0 10px;
+}
+
+.session-tab-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.connection-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.connection-status.connected {
+  background: #52c41a;
+  box-shadow: 0 0 6px rgba(82, 196, 26, 0.6);
+}
+
+.connection-status.disconnected {
+  background: #ff4d4f;
+  box-shadow: 0 0 6px rgba(255, 77, 79, 0.6);
+}
+
+.session-title {
+  font-size: 13px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.close-icon {
+  font-size: 10px;
+  padding: 2px;
+  border-radius: 2px;
+  transition: all 0.2s;
+  opacity: 0.6;
+}
+
+.close-icon:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ff4d4f;
+}
+
+.new-session-btn {
+  color: #1890ff;
+}
+
+.new-session-btn:hover {
+  color: #40a9ff;
+  background: rgba(24, 144, 255, 0.1);
+}

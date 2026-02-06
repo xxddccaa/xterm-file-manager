@@ -1,0 +1,125 @@
+.session-view {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  overflow: hidden;
+  flex: 1 1 0;
+  box-sizing: border-box;
+}
+
+.session-loading,
+.session-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  gap: 20px;
+}
+
+.session-loading p {
+  color: #888;
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+.error-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.session-split-pane {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  flex: 1 1 0;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.terminal-pane,
+.file-manager-pane,
+.local-files-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.terminal-pane {
+  background: #1e1e1e;
+}
+
+.file-manager-pane {
+  background: #252525;
+}
+
+.local-files-pane {
+  background: #2a2a2a;
+}
+
+.split-divider {
+  width: 4px;
+  background: #3d3d3d;
+  cursor: col-resize;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  z-index: 5;
+}
+
+.split-divider:hover {
+  background: #1890ff;
+}
+
+.split-divider:active {
+  background: #40a9ff;
+}
+
+.split-divider::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
+.pane-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.pane-info {
+  font-size: 11px;
+  color: #888;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.pane-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
