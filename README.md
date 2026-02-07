@@ -14,6 +14,7 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
   - **F2 to rename**: Quick rename for files and directories
   - Right-click context menu: Edit, Download, Upload, Delete, Rename
 - **Modern Terminal**: Based on xterm.js with full terminal emulation
+  - **Drag & Drop**: Drag files from Finder/Explorer to insert absolute path into terminal
 - **Clipboard Support**: Cmd+C/V copy-paste, select-to-copy, right-click-paste
 - **File Editor**: Multi-tab file editor with Notepad++-like features
   - **Drag & Drop**: Drag files from Finder/Explorer to open
@@ -35,6 +36,15 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 - **Lightweight**: Built with Go + Wails, much lighter than Electron
 
 ## Changelog
+
+### v2.26 - Terminal Drag & Drop Support (2026-02-07)
+
+- **Terminal Drag & Drop**: Drag files from Finder/Explorer into Terminal to insert absolute path
+  - Automatic path escaping for paths with spaces (wraps in quotes)
+  - Multiple files separated by spaces (shell argument list format)
+  - Visual feedback overlay when dragging files over terminal
+  - Works with both local terminal and SSH sessions
+  - Useful for quickly inserting file paths into commands without typing
 
 ### v2.25 - Editor Tab UX Optimization (2026-02-07)
 

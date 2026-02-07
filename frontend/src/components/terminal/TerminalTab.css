@@ -151,6 +151,46 @@
 }
 
 /* --- Terminal content area --- */
+.terminal-content {
+  position: relative;
+  --wails-drop-target: drop;
+}
+
+.terminal-content.dragging-file {
+  border: 2px dashed #1890ff;
+}
+
+.terminal-drop-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(24, 144, 255, 0.1);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.terminal-drop-message {
+  background: rgba(30, 30, 30, 0.95);
+  border: 2px dashed #1890ff;
+  border-radius: 8px;
+  padding: 40px 60px;
+  text-align: center;
+  color: #1890ff;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.terminal-drop-message p {
+  margin: 12px 0 0 0;
+  color: #d4d4d4;
+}
+
 .session-view {
   flex: 1;
   padding: 0;

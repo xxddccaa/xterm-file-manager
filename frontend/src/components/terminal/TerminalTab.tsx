@@ -51,6 +51,10 @@ const TerminalTab: React.FC = () => {
   // Guard: track hosts currently being connected to prevent rapid duplicate clicks
   const connectingHostsRef = useRef<Set<string>>(new Set())
 
+  // Drag and drop state for visual feedback
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
+  const dragTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     loadSSHConfig()
     loadTerminalSettings()
@@ -265,6 +269,47 @@ const TerminalTab: React.FC = () => {
     return sessions.some(session => session.name === host && session.connected && session.type === 'ssh')
   }
 
+  // Listen for global clear-drag event from App (Wails OnFileDrop bypasses browser onDrop)
+  useEffect(() => {
+    const clearDragHandler = () => {
+      setIsDraggingFile(false)
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current)
+      }
+    }
+    window.addEventListener('app:clear-drag-state', clearDragHandler)
+    return () => window.removeEventListener('app:clear-drag-state', clearDragHandler)
+  }, [])
+
+  // Drag and drop visual handlers (prevent browser default + show overlay)
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingFile(true)
+    // Safety: auto-clear overlay after 3s in case drop event is lost
+    if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current)
+    dragTimeoutRef.current = setTimeout(() => setIsDraggingFile(false), 3000)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const { clientX: x, clientY: y } = e
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDraggingFile(false)
+      if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current)
+    }
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingFile(false)
+    if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current)
+    // Actual file path writing is handled by App-level OnFileDrop -> Terminal component
+  }, [])
+
   return (
     <Layout className="terminal-tab-container">
       <Sider
@@ -328,7 +373,20 @@ const TerminalTab: React.FC = () => {
           </div>
         )}
       </Sider>
-      <Content className="terminal-content">
+      <Content 
+        className={`terminal-content ${isDraggingFile ? 'dragging-file' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDraggingFile && (
+          <div className="terminal-drop-overlay">
+            <div className="terminal-drop-message">
+              <span style={{ fontSize: 48 }}>📄</span>
+              <p>Drop files to insert path into terminal</p>
+            </div>
+          </div>
+        )}
         {sessions.length === 0 ? (
           <div className="empty-state">
             <p>No active sessions</p>

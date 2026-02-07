@@ -400,6 +400,49 @@ const Terminal: React.FC<TerminalProps> = ({
     }
   }, [sessionId, sessionType, handleResize])
 
+  // Listen for file drop events dispatched from App-level OnFileDrop
+  useEffect(() => {
+    if (!isActive) return
+
+    logger.log('🎯 [Terminal] Setting up file drop listener for session:', sessionId)
+    
+    const handler = (e: Event) => {
+      const paths = (e as CustomEvent).detail?.paths as string[]
+      logger.log('📥 [Terminal] File drop received, paths:', paths)
+
+      if (!paths || paths.length === 0) {
+        logger.log('⚠️ [Terminal] No paths received in drop event')
+        return
+      }
+
+      // Write each file path to the terminal
+      // For multiple files, separate them with spaces (like shell argument list)
+      // Escape paths with spaces by wrapping in quotes
+      const escapedPaths = paths.map(path => {
+        // If path contains spaces, wrap in quotes
+        if (path.includes(' ')) {
+          return `"${path}"`
+        }
+        return path
+      })
+      
+      const pathsText = escapedPaths.join(' ')
+      
+      WriteToTerminal(sessionId, pathsText).catch((err) => {
+        console.error('Failed to write file path to terminal:', err)
+      })
+
+      logger.log('✅ [Terminal] File paths written to terminal:', pathsText)
+    }
+
+    window.addEventListener('app:file-drop-terminal', handler)
+
+    return () => {
+      logger.log('🧹 [Terminal] Cleaning up file drop listener')
+      window.removeEventListener('app:file-drop-terminal', handler)
+    }
+  }, [sessionId, isActive])
+
   return <div ref={terminalRef} className="terminal-container" />
 }
 

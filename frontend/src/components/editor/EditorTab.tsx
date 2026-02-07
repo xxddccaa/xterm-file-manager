@@ -3,7 +3,6 @@ import { Button, message, Modal, Input, Dropdown } from 'antd'
 import { PlusOutlined, SaveOutlined, CloseOutlined, FileOutlined, FolderOpenOutlined, EllipsisOutlined } from '@ant-design/icons'
 import Editor from '@monaco-editor/react'
 import { ReadLocalFile, WriteLocalFile, CreateLocalFile, GetDefaultEditorDirectory, GetNextUntitledFileName, OpenFileDialog } from '../../../wailsjs/go/app/App'
-import { OnFileDrop, OnFileDropOff } from '../../../wailsjs/runtime/runtime'
 import './EditorTab.css'
 
 interface EditorFile {
@@ -101,13 +100,24 @@ const EditorTab: React.FC = () => {
     }
   }, [])
 
-  // Setup Wails OnFileDrop listener
+  // Listen for global clear-drag event from App (Wails OnFileDrop bypasses browser onDrop)
   useEffect(() => {
-    console.log('Setting up Wails OnFileDrop listener...')
-    OnFileDrop((_x: number, _y: number, paths: string[]) => {
-      console.log('OnFileDrop triggered, paths:', paths)
-      // Clear drag overlay immediately (browser onDrop won't fire with DisableWebViewDrop)
+    const clearDragHandler = () => {
       setIsDragging(false)
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current)
+      }
+    }
+    window.addEventListener('app:clear-drag-state', clearDragHandler)
+    return () => window.removeEventListener('app:clear-drag-state', clearDragHandler)
+  }, [])
+
+  // Listen for file drop events dispatched from App-level OnFileDrop
+  useEffect(() => {
+    console.log('Setting up Editor file drop listener...')
+    const handler = (e: Event) => {
+      const paths = (e as CustomEvent).detail?.paths as string[]
+      console.log('Editor file drop received, paths:', paths)
 
       if (!paths || paths.length === 0) {
         console.warn('No paths received in drop event')
@@ -118,11 +128,12 @@ const EditorTab: React.FC = () => {
         console.log('Opening dropped file:', filePath)
         openFileFromPath(filePath)
       }
-    }, true)
+    }
+    window.addEventListener('app:file-drop-editor', handler)
 
     return () => {
-      console.log('Cleaning up OnFileDrop listener')
-      OnFileDropOff()
+      console.log('Cleaning up Editor file drop listener')
+      window.removeEventListener('app:file-drop-editor', handler)
     }
   }, [openFileFromPath])
 
