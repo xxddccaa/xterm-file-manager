@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { Button, message, Modal, Input, Tabs } from 'antd'
-import { PlusOutlined, SaveOutlined, CloseOutlined, FileOutlined, FolderOpenOutlined } from '@ant-design/icons'
+import { Button, message, Modal, Input, Dropdown } from 'antd'
+import { PlusOutlined, SaveOutlined, CloseOutlined, FileOutlined, FolderOpenOutlined, EllipsisOutlined } from '@ant-design/icons'
 import Editor from '@monaco-editor/react'
 import { ReadLocalFile, WriteLocalFile, CreateLocalFile, GetDefaultEditorDirectory, GetNextUntitledFileName, OpenFileDialog } from '../../../wailsjs/go/app/App'
 import { OnFileDrop, OnFileDropOff } from '../../../wailsjs/runtime/runtime'
@@ -47,6 +47,7 @@ const EditorTab: React.FC = () => {
   const [defaultDirectory, setDefaultDirectory] = useState('')
   const editorRefs = useRef<{ [key: string]: any }>({})
   const fileCounterRef = useRef(1)
+  const tabBarRef = useRef<HTMLDivElement>(null)
 
   // Use a ref to always have access to the latest files state (avoids stale closure)
   const filesRef = useRef<EditorFile[]>([])
@@ -88,9 +89,11 @@ const EditorTab: React.FC = () => {
         language: getLanguage(filePath),
         isNew: false,
       }
-      // Use functional state update to avoid stale closure
-      setFiles(prev => [...prev, newFile])
+      // Prepend so the newest file is always the first (leftmost) tab
+      setFiles(prev => [newFile, ...prev])
       setActiveFileId(newFile.id)
+      // Scroll tab bar to start to reveal the new first tab
+      setTimeout(() => { if (tabBarRef.current) tabBarRef.current.scrollLeft = 0 }, 0)
       message.success(`Opened: ${newFile.name}`)
     } catch (err: any) {
       message.error(`Failed to open file: ${err?.message || err}`)
@@ -134,8 +137,9 @@ const EditorTab: React.FC = () => {
       language: 'plaintext',
       isNew: true,
     }
-    setFiles(prev => [...prev, newFile])
+    setFiles(prev => [newFile, ...prev])
     setActiveFileId(newFile.id)
+    setTimeout(() => { if (tabBarRef.current) tabBarRef.current.scrollLeft = 0 }, 0)
   }
 
   // Open file dialog
@@ -265,12 +269,21 @@ const EditorTab: React.FC = () => {
 
   const closeFileConfirmed = (fileId: string) => {
     setFiles(prev => {
+      const idx = prev.findIndex(f => f.id === fileId)
       const newFiles = prev.filter(f => f.id !== fileId)
       // Update active file if we're closing the current one
       if (activeFileId === fileId) {
-        const newActive = newFiles.length > 0 ? newFiles[newFiles.length - 1].id : null
-        // Use setTimeout to avoid state update during render
+        // Select the tab that takes this position (keeps focus near the close button)
+        const newActive = newFiles.length > 0
+          ? newFiles[Math.min(idx, newFiles.length - 1)].id
+          : null
         setTimeout(() => setActiveFileId(newActive), 0)
+      }
+      // Reset scroll when closing the first tab to keep close button position stable
+      if (idx === 0 && tabBarRef.current) {
+        setTimeout(() => {
+          if (tabBarRef.current) tabBarRef.current.scrollLeft = 0
+        }, 0)
       }
       return newFiles
     })
@@ -330,49 +343,6 @@ const EditorTab: React.FC = () => {
     // Actual file opening is handled by Wails OnFileDrop
   }, [])
 
-  // Render tabs
-  const tabItems = files.map(file => ({
-    key: file.id,
-    label: (
-      <div className="editor-tab-label" title={file.path || file.name}>
-        <FileOutlined style={{ marginRight: 4, flexShrink: 0 }} />
-        <span>{file.name}</span>
-        {file.modified && <span className="editor-modified-dot" style={{ flexShrink: 0 }}>●</span>}
-        <CloseOutlined
-          className="editor-tab-close"
-          style={{ flexShrink: 0 }}
-          onClick={(e) => {
-            e.stopPropagation()
-            handleCloseFile(file.id)
-          }}
-        />
-      </div>
-    ),
-    children: (
-      <div className="editor-content">
-        <Editor
-          height="100%"
-          language={file.language}
-          value={file.content}
-          onChange={(value) => handleEditorChange(value, file.id)}
-          onMount={(editor) => handleEditorMount(editor, file.id)}
-          theme="vs-dark"
-          options={{
-            minimap: { enabled: true },
-            fontSize: 14,
-            lineNumbers: 'on',
-            rulers: [80, 120],
-            wordWrap: 'off',
-            scrollBeyondLastLine: false,
-            automaticLayout: true,
-            tabSize: 2,
-            insertSpaces: true,
-          }}
-        />
-      </div>
-    ),
-  }))
-
   return (
     <div
       className={`editor-tab-container ${isDragging ? 'dragging' : ''}`}
@@ -424,13 +394,84 @@ const EditorTab: React.FC = () => {
           <p className="editor-empty-hint">Create a new file or drag & drop files here</p>
         </div>
       ) : (
-        <Tabs
-          type="card"
-          activeKey={activeFileId || undefined}
-          onChange={setActiveFileId}
-          items={tabItems}
-          className="editor-tabs"
-        />
+        <div className="editor-main">
+          {/* Tab bar wrapper: scrollable tabs + fixed "..." button */}
+          <div className="tab-bar-wrapper">
+            <div className="custom-tab-bar" ref={tabBarRef}>
+              {files.map((file) => (
+                <div
+                  key={file.id}
+                  className={`custom-tab ${file.id === activeFileId ? 'active' : ''}`}
+                  onClick={() => setActiveFileId(file.id)}
+                  title={file.path || file.name}
+                >
+                  <FileOutlined className="custom-tab-icon" />
+                  <span className="editor-tab-filename">{file.name}</span>
+                  {file.modified && <span className="editor-modified-dot">●</span>}
+                  <CloseOutlined
+                    className="editor-tab-close"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleCloseFile(file.id)
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <Dropdown
+              menu={{
+                items: files.map(file => ({
+                  key: file.id,
+                  label: (
+                    <span>
+                      <FileOutlined style={{ marginRight: 6, fontSize: 12 }} />
+                      {file.name}
+                      {file.modified && <span style={{ color: '#52c41a', marginLeft: 4 }}>●</span>}
+                    </span>
+                  ),
+                })),
+                selectedKeys: activeFileId ? [activeFileId] : [],
+                onClick: ({ key }) => setActiveFileId(key),
+              }}
+              trigger={['click']}
+              placement="bottomRight"
+            >
+              <div className="tab-list-btn" title="All open files">
+                <EllipsisOutlined />
+              </div>
+            </Dropdown>
+          </div>
+
+          {/* Editor content — all editors mounted, only active visible */}
+          <div className="editor-content-area">
+            {files.map((file) => (
+              <div
+                key={file.id}
+                className={`editor-pane ${file.id === activeFileId ? 'editor-pane-active' : ''}`}
+              >
+                <Editor
+                  height="100%"
+                  language={file.language}
+                  value={file.content}
+                  onChange={(value) => handleEditorChange(value, file.id)}
+                  onMount={(editor) => handleEditorMount(editor, file.id)}
+                  theme="vs-dark"
+                  options={{
+                    minimap: { enabled: true },
+                    fontSize: 14,
+                    lineNumbers: 'on',
+                    rulers: [80, 120],
+                    wordWrap: 'off',
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    tabSize: 2,
+                    insertSpaces: true,
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <Modal

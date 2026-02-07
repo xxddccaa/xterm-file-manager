@@ -36,6 +36,16 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.25 - Editor Tab UX Optimization (2026-02-07)
+
+- **Custom Tab Bar**: Replaced Ant Design Tabs with native scrollable tab bar
+  - First tab pinned (position: sticky) — close button stays at fixed screen position
+  - Click x repeatedly without moving mouse to close multiple files
+  - Native `overflow-x: auto` for reliable sticky behavior
+- **New Files Leftmost**: Latest opened files prepend to tab list (left-side insertion)
+- **"..." File List Button**: Dropdown shows all open files with quick switch
+- **Compact Tabs**: Tab width reduced to 90px (2x more visible tabs on screen)
+
 ### v2.24 - macOS Dock Menu Integration (2026-02-06)
 
 - **Custom Dock Menu**: Right-click app icon in Dock shows all open editor windows

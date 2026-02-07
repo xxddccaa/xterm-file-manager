@@ -65,41 +65,91 @@
   color: #666 !important;
 }
 
-.editor-tabs {
+/* ── Custom tab bar (replaces Ant Design Tabs for native scroll + sticky) ── */
+
+.editor-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.editor-tabs .ant-tabs-content-holder {
+.tab-bar-wrapper {
+  display: flex;
+  align-items: stretch;
+  background: #252526;
+  border-bottom: 1px solid #3e3e42;
+  flex-shrink: 0;
+}
+
+.custom-tab-bar {
   flex: 1;
-  overflow: hidden;
+  display: flex;
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #555 #252526;
 }
 
-.editor-tabs .ant-tabs-content {
-  height: 100%;
+.custom-tab-bar::-webkit-scrollbar {
+  height: 3px;
 }
 
-.editor-tabs .ant-tabs-tabpane {
-  height: 100%;
-  padding: 0;
+.custom-tab-bar::-webkit-scrollbar-track {
+  background: #252526;
 }
 
-.editor-tab-label {
+.custom-tab-bar::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 2px;
+}
+
+.custom-tab {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
+  width: 90px;
+  min-width: 90px;
+  padding: 5px 6px;
+  background: #2d2d2d;
+  border-right: 1px solid #3e3e42;
+  border-top: 2px solid transparent;
+  cursor: pointer;
   user-select: none;
-  max-width: 160px;
+  color: #ccc;
+  font-size: 12px;
+  transition: background 0.15s;
+  box-sizing: border-box;
 }
 
-.editor-tab-label span {
+.custom-tab:hover {
+  background: #363636;
+}
+
+.custom-tab.active {
+  background: #1e1e1e;
+  color: #fff;
+  border-top-color: #1890ff;
+}
+
+/* Pin first tab so close-button stays at fixed screen position */
+.custom-tab:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.custom-tab-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.editor-tab-filename {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 120px;
-  display: inline-block;
+  flex: 1;
+  min-width: 0;
 }
 
 .editor-modified-dot {
@@ -107,10 +157,12 @@
   margin-left: 4px;
   font-size: 16px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .editor-tab-close {
-  margin-left: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
   color: #888;
   font-size: 12px;
   transition: color 0.2s;
@@ -120,41 +172,50 @@
   color: #fff;
 }
 
-.editor-file-list-btn {
-  color: #ccc;
-  font-size: 16px;
-  margin-right: 8px;
-  border: none;
+/* "..." button to list all open files */
+.tab-list-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: #888;
+  font-size: 14px;
+  background: #252526;
+  border-left: 1px solid #3e3e42;
+  transition: color 0.15s, background 0.15s;
 }
 
-.editor-file-list-btn:hover {
+.tab-list-btn:hover {
   color: #fff;
   background: #3e3e42;
+}
+
+/* ── Editor content area ── */
+
+.editor-content-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.editor-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.editor-pane-active {
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .editor-content {
   height: 100%;
   width: 100%;
-}
-
-/* Override Ant Design dark theme for tabs */
-.editor-tabs.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab {
-  background: #2d2d2d;
-  border-color: #3e3e42;
-  color: #ccc;
-}
-
-.editor-tabs.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active {
-  background: #1e1e1e;
-  border-bottom-color: #1e1e1e;
-  color: #fff;
-}
-
-.editor-tabs.ant-tabs-card > .ant-tabs-nav {
-  background: #252526;
-  margin: 0;
-}
-
-.editor-tabs.ant-tabs-card > .ant-tabs-nav::before {
-  border-bottom: 1px solid #3e3e42;
 }
