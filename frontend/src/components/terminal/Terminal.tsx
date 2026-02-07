@@ -126,8 +126,6 @@ const Terminal: React.FC<TerminalProps> = ({
       },
       rightClickSelectsWord: false,
       disableStdin: false,
-      // Enable bracketed paste mode for better multiline paste handling
-      // This allows shells like zsh to show @zsh (1-5) indicators
       allowTransparency: false,
       macOptionIsMeta: true, // Allow Option key as Meta on macOS
       scrollback: 10000,
@@ -274,7 +272,7 @@ const Terminal: React.FC<TerminalProps> = ({
       }
 
       // Handle Cmd+V (Mac) / Ctrl+V (other) for paste
-      // For multiline paste, preserve internal newlines but strip trailing ones
+      // Preserve content as-is without bracketed paste mode (causes issues in vim)
       if ((isMac && event.metaKey && isKey(event, 'v', 'KeyV') && !event.ctrlKey) ||
           (isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey) ||
           (!isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey)) {
@@ -282,28 +280,11 @@ const Terminal: React.FC<TerminalProps> = ({
         event.preventDefault()
         ClipboardGetText().then((text) => {
           if (text) {
-            // Detect if this is multiline content
-            const hasMultipleLines = text.includes('\n') || text.includes('\r')
-            
-            if (hasMultipleLines) {
-              // For multiline paste: use bracketed paste mode
-              // This allows shells like zsh to show @zsh (1-5) indicators
-              // Strip only trailing newlines to prevent auto-execution
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              
-              // Send with bracketed paste escape sequences
-              // \x1b[200~ starts bracketed paste, \x1b[201~ ends it
-              const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
-              WriteToTerminal(sessionId, bracketedText).catch((err) => {
-                console.error('Failed to paste to terminal:', err)
-              })
-            } else {
-              // Single line paste: just strip trailing whitespace
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              WriteToTerminal(sessionId, trimmedText).catch((err) => {
-                console.error('Failed to paste to terminal:', err)
-              })
-            }
+            // Paste as-is without modification
+            // This works correctly in both shell and vim
+            WriteToTerminal(sessionId, text).catch((err) => {
+              console.error('Failed to paste to terminal:', err)
+            })
           }
         }).catch((err) => {
           console.error('Failed to get clipboard text:', err)
@@ -313,12 +294,14 @@ const Terminal: React.FC<TerminalProps> = ({
 
       // On Mac, let Ctrl+[key] shortcuts pass through to terminal
       // This allows Ctrl+A, Ctrl+D, Ctrl+E, Ctrl+K, Ctrl+U, Ctrl+Z, etc. to work properly
-      if (isMac && event.ctrlKey && !event.metaKey && !event.altKey && !isKey(event, 'c', 'KeyC')) {
+      // IMPORTANT: Exclude Ctrl+C and Ctrl+V from this rule (already handled above)
+      if (isMac && event.ctrlKey && !event.metaKey && !event.altKey && 
+          !isKey(event, 'c', 'KeyC') && !isKey(event, 'v', 'KeyV')) {
         logger.log('✅ [Terminal] Ctrl+' + normalizeKey(event.key).toUpperCase() + ' passing through to terminal');
-        return true // Let terminal handle Ctrl shortcuts (except Ctrl+C which we handled above)
+        return true // Let terminal handle Ctrl shortcuts
       }
 
-      // Allow all other keys to pass through to terminal
+      // Allow all other keys (including Backspace, Delete, arrow keys, etc.) to pass through
       return true
     })
 
@@ -345,22 +328,9 @@ const Terminal: React.FC<TerminalProps> = ({
         try {
           const text = await ClipboardGetText()
           if (text) {
-            // Detect if this is multiline content
-            const hasMultipleLines = text.includes('\n') || text.includes('\r')
-            
-            if (hasMultipleLines) {
-              // For multiline paste: use bracketed paste mode
-              // Strip only trailing newlines to prevent auto-execution
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              
-              // Send with bracketed paste escape sequences
-              const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
-              await WriteToTerminal(sessionId, bracketedText)
-            } else {
-              // Single line paste: just strip trailing whitespace
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              await WriteToTerminal(sessionId, trimmedText)
-            }
+            // Paste as-is without modification
+            // This works correctly in both shell and vim
+            await WriteToTerminal(sessionId, text)
           }
         } catch (err) {
           console.error('Failed to paste from clipboard:', err)
