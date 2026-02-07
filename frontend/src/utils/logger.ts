@@ -1,6 +1,8 @@
 /**
- * Logger utility that writes to both console and temporary log file
- * Log file location: /tmp/xterm-file-manager-debug.log
+ * Logger utility that writes to both console and user-specific log file.
+ * Log path is managed by the Go backend (getDebugLogPath):
+ *   macOS: ~/Library/Logs/xterm-file-manager/debug.log
+ *   Linux: ~/.cache/xterm-file-manager/debug.log
  */
 
 class Logger {

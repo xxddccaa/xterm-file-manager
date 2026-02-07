@@ -26,16 +26,16 @@ type TerminalMessage struct {
 // TerminalSession represents a WebSocket terminal session
 type TerminalSession struct {
 	SessionID   string
-	SSHSession  *ssh.Session      // For SSH sessions
-	LocalCmd    *exec.Cmd         // For local terminal sessions
-	LocalPTY    *os.File          // PTY file for local sessions
+	SSHSession  *ssh.Session // For SSH sessions
+	LocalCmd    *exec.Cmd    // For local terminal sessions
+	LocalPTY    *os.File     // PTY file for local sessions
 	WebSocket   *websocket.Conn
-	StdinPipe   io.WriteCloser    // For SSH sessions
-	LocalStdin  io.WriteCloser    // For local sessions
+	StdinPipe   io.WriteCloser // For SSH sessions
+	LocalStdin  io.WriteCloser // For local sessions
 	mu          sync.Mutex
 	stopChan    chan struct{}
 	isConnected bool
-	isLocal     bool              // true for local terminal, false for SSH
+	isLocal     bool // true for local terminal, false for SSH
 }
 
 var (
@@ -125,7 +125,7 @@ func (a *App) StartTerminalSession(sessionID string, rows int, cols int) error {
 			termSessionMu.Unlock()
 		}()
 
-		buffer := make([]byte, 32*1024)
+		buffer := make([]byte, IOBufferSize)
 		for {
 			select {
 			case <-termSession.stopChan:
@@ -148,7 +148,7 @@ func (a *App) StartTerminalSession(sessionID string, rows int, cols int) error {
 	}()
 
 	go func() {
-		buffer := make([]byte, 32*1024)
+		buffer := make([]byte, IOBufferSize)
 		for {
 			select {
 			case <-termSession.stopChan:
@@ -214,10 +214,10 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int) er
 
 	// Create command
 	cmd := exec.Command(shell)
-	
+
 	// Set environment variables
 	cmd.Env = os.Environ()
-	
+
 	// Create PTY
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -264,7 +264,7 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int) er
 			termSessionMu.Unlock()
 		}()
 
-		buffer := make([]byte, 32*1024)
+		buffer := make([]byte, IOBufferSize)
 		for {
 			select {
 			case <-termSession.stopChan:
@@ -420,9 +420,10 @@ func (a *App) emitTerminalOutput(sessionID string, data string) {
 			"sessionId": sessionID,
 			"data":      data,
 		}
-		
+
 		// Emit event to frontend
 		runtime.EventsEmit(a.ctx, "terminal:output", payload)
-		log.Printf("Terminal output [%s]: %d bytes", sessionID, len(data))
+		// Note: removed per-output logging to avoid performance overhead
+		// in high-throughput scenarios (e.g. cat large file, compilation output)
 	}
 }

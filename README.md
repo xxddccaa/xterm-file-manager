@@ -37,6 +37,28 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.27 - Security & Performance Improvements (2026-02-07)
+
+**Security Enhancements:**
+- SSH Host Key Verification: Implemented TOFU (Trust On First Use) strategy
+  - Verifies host keys against `~/.ssh/known_hosts`
+  - Auto-trusts new hosts and records fingerprint
+  - Detects and blocks key mismatch attacks
+- Fixed JSON marshal error handling (prevents silent failures)
+- Fixed EOF error comparison (proper type checking instead of string comparison)
+
+**Performance Optimizations:**
+- SFTP Connection Pool: Reuses SFTP connections instead of creating/destroying per operation
+- Removed excessive terminal output logging (eliminates per-byte logging overhead)
+- Extracted magic numbers to named constants (IOBufferSize=32KB, SSHConnectTimeout=10s)
+
+**Bug Fixes:**
+- Debug log path: Changed from shared `/tmp` to user-specific directory
+  - macOS: `~/Library/Logs/xterm-file-manager/debug.log`
+  - Linux: `~/.cache/xterm-file-manager/debug.log`
+- Added missing RenameLocalFile and RenameRemoteFile backend methods
+- Deprecated CreatePTY method (goroutine leak risk, use StartTerminalSession instead)
+
 ### v2.26 - Terminal Drag & Drop Support (2026-02-07)
 
 - **Terminal Drag & Drop**: Drag files from Finder/Explorer into Terminal to insert absolute path

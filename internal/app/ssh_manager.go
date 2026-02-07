@@ -1,8 +1,12 @@
 package app
 
 import (
+	"bufio"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
-	"io"
+	"log"
+	"net"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -43,15 +47,146 @@ type FileInfo struct {
 	IsDir   bool   `json:"isDir"`
 }
 
+// knownHostsCallback returns an ssh.HostKeyCallback that implements TOFU
+// (Trust On First Use) - same behavior as OpenSSH:
+// - If host exists in ~/.ssh/known_hosts, verify the key matches
+// - If host is new, accept the key and append it to known_hosts
+func knownHostsCallback() ssh.HostKeyCallback {
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		usr, err := user.Current()
+		if err != nil {
+			// Cannot determine home dir, fall back to trust
+			log.Printf("Warning: cannot get current user for known_hosts check: %v", err)
+			return nil
+		}
+
+		knownHostsPath := filepath.Join(usr.HomeDir, ".ssh", "known_hosts")
+
+		// Normalize hostname (strip port if it's default 22)
+		host, port, _ := net.SplitHostPort(hostname)
+		if host == "" {
+			host = hostname
+		}
+
+		// Build the host key fingerprint for logging
+		fingerprint := sha256.Sum256(key.Marshal())
+		fpStr := base64.StdEncoding.EncodeToString(fingerprint[:])
+
+		// Try to find existing entry in known_hosts
+		found, mismatch := checkKnownHost(knownHostsPath, host, port, key)
+
+		if mismatch {
+			return fmt.Errorf("host key mismatch for %s (fingerprint SHA256:%s). "+
+				"This may indicate a man-in-the-middle attack. "+
+				"Remove the old entry from %s to proceed", host, fpStr, knownHostsPath)
+		}
+
+		if found {
+			// Key matches known_hosts entry
+			return nil
+		}
+
+		// TOFU: host not in known_hosts, accept and record
+		log.Printf("New host key for %s (SHA256:%s), adding to known_hosts", host, fpStr)
+		if err := appendKnownHost(knownHostsPath, host, port, key); err != nil {
+			log.Printf("Warning: failed to write known_hosts: %v", err)
+			// Still allow connection even if we can't write known_hosts
+		}
+		return nil
+	}
+}
+
+// checkKnownHost checks if a host key exists in known_hosts.
+// Returns (found, mismatch): found=true if host exists with matching key,
+// mismatch=true if host exists but key differs.
+func checkKnownHost(knownHostsPath, host, port string, key ssh.PublicKey) (found bool, mismatch bool) {
+	f, err := os.Open(knownHostsPath)
+	if err != nil {
+		return false, false // File doesn't exist or can't open
+	}
+	defer f.Close()
+
+	keyType := key.Type()
+	keyData := base64.StdEncoding.EncodeToString(key.Marshal())
+
+	// Build possible host patterns to match
+	hostPatterns := []string{host}
+	if port != "" && port != "22" {
+		hostPatterns = append(hostPatterns, fmt.Sprintf("[%s]:%s", host, port))
+	}
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+
+		lineHosts := strings.Split(fields[0], ",")
+		lineKeyType := fields[1]
+		lineKeyData := fields[2]
+
+		// Check if any of our host patterns match this line
+		for _, pattern := range hostPatterns {
+			for _, lh := range lineHosts {
+				if strings.TrimSpace(lh) == pattern {
+					// Host found - check if key matches
+					if lineKeyType == keyType && lineKeyData == keyData {
+						return true, false // Exact match
+					}
+					if lineKeyType == keyType {
+						return false, true // Same type, different key = mismatch
+					}
+					// Different key type, continue searching
+				}
+			}
+		}
+	}
+
+	return false, false
+}
+
+// appendKnownHost appends a new host key entry to known_hosts file
+func appendKnownHost(knownHostsPath, host, port string, key ssh.PublicKey) error {
+	// Ensure .ssh directory exists
+	dir := filepath.Dir(knownHostsPath)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Format: hostname key-type base64-key
+	hostEntry := host
+	if port != "" && port != "22" {
+		hostEntry = fmt.Sprintf("[%s]:%s", host, port)
+	}
+
+	keyData := base64.StdEncoding.EncodeToString(key.Marshal())
+	line := fmt.Sprintf("%s %s %s\n", hostEntry, key.Type(), keyData)
+
+	_, err = f.WriteString(line)
+	return err
+}
+
 // ConnectSSH establishes SSH connection
 func (a *App) ConnectSSH(config SSHConfigEntry) (string, error) {
 	sessionID := fmt.Sprintf("%s-%d", config.Host, time.Now().Unix())
 
-	// Build SSH client config
+	// Build SSH client config with known_hosts verification (TOFU strategy)
 	sshConfig := &ssh.ClientConfig{
 		User:            config.User,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
-		Timeout:         10 * time.Second,
+		HostKeyCallback: knownHostsCallback(),
+		Timeout:         SSHConnectTimeout * time.Second,
 	}
 
 	// Handle authentication
@@ -117,6 +252,9 @@ func (a *App) ConnectSSH(config SSHConfigEntry) (string, error) {
 
 // DisconnectSSH closes an SSH connection
 func (a *App) DisconnectSSH(sessionID string) error {
+	// Clean up cached SFTP client first
+	closeSFTPClient(sessionID)
+
 	sshManager.mu.Lock()
 	defer sshManager.mu.Unlock()
 
@@ -176,7 +314,7 @@ func (a *App) ListFiles(sessionID string, path string) ([]FileInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SFTP client: %v", err)
 	}
-	defer sftpClient.Close()
+	// SFTP client is managed by pool, do not close here
 
 	// Resolve special paths (., ~, ~/...)
 	if path == "" || path == "~" || path == "." {
@@ -231,81 +369,10 @@ func (a *App) GetCurrentDirectory(sessionID string) (string, error) {
 	return a.ExecuteCommand(sessionID, "pwd")
 }
 
-// CreatePTY creates a pseudo-terminal session
+// CreatePTY creates a pseudo-terminal session.
+// Deprecated: This function is legacy code and should not be used.
+// Use StartTerminalSession or StartLocalTerminalSession instead.
+// This method has goroutine leak issues and is kept only for compatibility.
 func (a *App) CreatePTY(sessionID string) error {
-	sshManager.mu.RLock()
-	session, exists := sshManager.sessions[sessionID]
-	sshManager.mu.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
-	}
-
-	if !session.Connected || session.Client == nil {
-		return fmt.Errorf("session not connected")
-	}
-
-	// Create new SSH session for PTY
-	sshSession, err := session.Client.NewSession()
-	if err != nil {
-		return fmt.Errorf("failed to create SSH session: %v", err)
-	}
-
-	// Request PTY
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          1,
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400,
-	}
-
-	if err := sshSession.RequestPty("xterm-256color", 40, 80, modes); err != nil {
-		sshSession.Close()
-		return fmt.Errorf("failed to request PTY: %v", err)
-	}
-
-	// Get stdin/stdout/stderr
-	stdin, err := sshSession.StdinPipe()
-	if err != nil {
-		sshSession.Close()
-		return fmt.Errorf("failed to get stdin: %v", err)
-	}
-
-	stdout, err := sshSession.StdoutPipe()
-	if err != nil {
-		sshSession.Close()
-		return fmt.Errorf("failed to get stdout: %v", err)
-	}
-
-	stderr, err := sshSession.StderrPipe()
-	if err != nil {
-		sshSession.Close()
-		return fmt.Errorf("failed to get stderr: %v", err)
-	}
-
-	// Start shell
-	if err := sshSession.Shell(); err != nil {
-		sshSession.Close()
-		return fmt.Errorf("failed to start shell: %v", err)
-	}
-
-	// Handle I/O in goroutines
-	go func() {
-		io.Copy(os.Stdout, stdout)
-	}()
-
-	go func() {
-		io.Copy(os.Stderr, stderr)
-	}()
-
-	go func() {
-		io.Copy(stdin, os.Stdin)
-	}()
-
-	// Wait for session to end
-	go func() {
-		sshSession.Wait()
-		sshSession.Close()
-	}()
-
-	return nil
+	return fmt.Errorf("CreatePTY is deprecated - use StartTerminalSession or StartLocalTerminalSession")
 }

@@ -8,6 +8,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/sftp"
@@ -83,8 +84,34 @@ func (a *App) ListLocalFiles(path string) ([]LocalFileInfo, error) {
 	return files, nil
 }
 
-// getSFTPClient creates an SFTP client from an existing SSH session
+// sftpPool caches SFTP clients per session to avoid repeated creation/teardown.
+// Each SSH session maps to at most one cached SFTP client.
+var sftpPool = struct {
+	mu      sync.Mutex
+	clients map[string]*sftp.Client
+}{
+	clients: make(map[string]*sftp.Client),
+}
+
+// getSFTPClient returns a cached or new SFTP client for the given session.
+// Callers should NOT close the returned client; it's managed by the pool.
+// Use closeSFTPClient(sessionID) when the SSH session is torn down.
 func getSFTPClient(sessionID string) (*sftp.Client, error) {
+	sftpPool.mu.Lock()
+	defer sftpPool.mu.Unlock()
+
+	// Return cached client if alive
+	if client, ok := sftpPool.clients[sessionID]; ok {
+		// Quick health check: try Getwd to verify connection is alive
+		if _, err := client.Getwd(); err == nil {
+			return client, nil
+		}
+		// Stale client, clean up
+		client.Close()
+		delete(sftpPool.clients, sessionID)
+	}
+
+	// Create new SFTP client
 	sshManager.mu.RLock()
 	session, exists := sshManager.sessions[sessionID]
 	sshManager.mu.RUnlock()
@@ -102,7 +129,20 @@ func getSFTPClient(sessionID string) (*sftp.Client, error) {
 		return nil, fmt.Errorf("failed to create SFTP client: %v", err)
 	}
 
+	sftpPool.clients[sessionID] = sftpClient
 	return sftpClient, nil
+}
+
+// closeSFTPClient removes and closes the cached SFTP client for a session.
+// Should be called when the SSH session disconnects.
+func closeSFTPClient(sessionID string) {
+	sftpPool.mu.Lock()
+	defer sftpPool.mu.Unlock()
+
+	if client, ok := sftpPool.clients[sessionID]; ok {
+		client.Close()
+		delete(sftpPool.clients, sessionID)
+	}
 }
 
 // resolveRemotePath resolves ~ in remote paths to the actual home directory via SFTP
@@ -128,7 +168,7 @@ func (a *App) GetRemoteHomeDir(sessionID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer sftpClient.Close()
+	// SFTP client is managed by pool, do not close here
 
 	homeDir, err := sftpClient.Getwd()
 	if err != nil {
@@ -143,7 +183,7 @@ func (a *App) DownloadFile(sessionID string, remotePath string, localDir string)
 	if err != nil {
 		return "", err
 	}
-	defer sftpClient.Close()
+	// SFTP client is managed by pool, do not close here
 
 	// Resolve ~ to actual home directory
 	remotePath = resolveRemotePath(sftpClient, remotePath)
@@ -193,7 +233,7 @@ func (a *App) UploadFile(sessionID string, localPath string, remoteDir string) (
 	if err != nil {
 		return "", err
 	}
-	defer sftpClient.Close()
+	// SFTP client is managed by pool, do not close here
 
 	// Resolve ~ to actual home directory
 	remoteDir = resolveRemotePath(sftpClient, remoteDir)
@@ -243,7 +283,7 @@ func (a *App) DownloadDirectory(sessionID string, remotePath string, localDir st
 	if err != nil {
 		return err
 	}
-	defer sftpClient.Close()
+	// SFTP client is managed by pool, do not close here
 
 	// Resolve ~ to actual home directory
 	remotePath = resolveRemotePath(sftpClient, remotePath)
@@ -304,7 +344,7 @@ func (a *App) DeleteRemoteFile(sessionID string, remotePath string) error {
 	if err != nil {
 		return err
 	}
-	defer sftpClient.Close()
+	// SFTP client is managed by pool, do not close here
 
 	// Resolve ~ to actual home directory
 	remotePath = resolveRemotePath(sftpClient, remotePath)
@@ -336,7 +376,7 @@ func (a *App) DeleteRemoteDirectory(sessionID string, remotePath string) error {
 	if err != nil {
 		return err
 	}
-	defer sftpClient.Close()
+	// SFTP client is managed by pool, do not close here
 
 	// Resolve ~ to actual home directory
 	remotePath = resolveRemotePath(sftpClient, remotePath)
@@ -389,6 +429,37 @@ func (a *App) DeleteRemoteDirectory(sessionID string, remotePath string) error {
 	return nil
 }
 
+// RenameRemoteFile renames or moves a remote file or directory via SFTP
+func (a *App) RenameRemoteFile(sessionID string, oldPath string, newName string) error {
+	sftpClient, err := getSFTPClient(sessionID)
+	if err != nil {
+		return err
+	}
+	// SFTP client is managed by pool, do not close here
+
+	// Resolve ~ to actual home directory
+	oldPath = resolveRemotePath(sftpClient, oldPath)
+
+	log.Printf("✏️ Renaming remote file: %s -> %s", oldPath, newName)
+
+	// Build new path (same directory, new name)
+	dir := filepath.Dir(oldPath)
+	newPath := filepath.Join(dir, newName)
+
+	// Check if target already exists
+	if _, err := sftpClient.Stat(newPath); err == nil {
+		return fmt.Errorf("target file already exists: %s", newPath)
+	}
+
+	// Perform rename
+	if err := sftpClient.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("failed to rename remote file: %v", err)
+	}
+
+	log.Printf("✅ Renamed remote file: %s -> %s", oldPath, newPath)
+	return nil
+}
+
 // DeleteLocalFile deletes a local file
 func (a *App) DeleteLocalFile(localPath string) error {
 	log.Printf("🗑️ Deleting local file: %s", localPath)
@@ -422,5 +493,27 @@ func (a *App) DeleteLocalDirectory(localPath string) error {
 	}
 
 	log.Printf("✅ Deleted local directory: %s", localPath)
+	return nil
+}
+
+// RenameLocalFile renames or moves a local file or directory
+func (a *App) RenameLocalFile(oldPath string, newName string) error {
+	log.Printf("✏️ Renaming local file: %s -> %s", oldPath, newName)
+
+	// Build new path (same directory, new name)
+	dir := filepath.Dir(oldPath)
+	newPath := filepath.Join(dir, newName)
+
+	// Check if target already exists
+	if _, err := os.Stat(newPath); err == nil {
+		return fmt.Errorf("target file already exists: %s", newPath)
+	}
+
+	// Perform rename
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("failed to rename file: %v", err)
+	}
+
+	log.Printf("✅ Renamed local file: %s -> %s", oldPath, newPath)
 	return nil
 }

@@ -10,6 +10,7 @@ import {
   EditOutlined,
 } from '@ant-design/icons';
 import { Input, Button, message, Spin, Modal } from 'antd';
+import { GetHomeDirectory, ListLocalFiles, OpenEditorWindow, DeleteLocalDirectory, DeleteLocalFile, DownloadFile, RenameLocalFile } from '../../../wailsjs/go/app/App'
 import logger from '../../utils/logger'
 import './LocalFileManager.css';
 
@@ -63,19 +64,16 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
 
   useEffect(() => {
     // Get home directory on mount
-    if ((window as any).go?.app?.App?.GetHomeDirectory) {
-      (window as any).go.app.App
-        .GetHomeDirectory()
-        .then((homePath: string) => {
-          setCurrentPath(homePath);
-          setPathInput(homePath);
-          loadFiles(homePath);
-        })
-        .catch((err: any) => {
-          console.error('Failed to get home directory:', err);
-          message.error('Failed to get home directory');
-        });
-    }
+    GetHomeDirectory()
+      .then((homePath: string) => {
+        setCurrentPath(homePath);
+        setPathInput(homePath);
+        loadFiles(homePath);
+      })
+      .catch((err: any) => {
+        console.error('Failed to get home directory:', err);
+        message.error('Failed to get home directory');
+      });
   }, []);
 
   // Refresh when refreshKey changes

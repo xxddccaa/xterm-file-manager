@@ -62,6 +62,10 @@ export function GetCurrentDirectory(arg1) {
   return window['go']['app']['App']['GetCurrentDirectory'](arg1);
 }
 
+export function GetDebugLogPath() {
+  return window['go']['app']['App']['GetDebugLogPath']();
+}
+
 export function GetDefaultEditorDirectory() {
   return window['go']['app']['App']['GetDefaultEditorDirectory']();
 }
@@ -112,6 +116,14 @@ export function ReadLocalFile(arg1) {
 
 export function ReadRemoteFile(arg1, arg2) {
   return window['go']['app']['App']['ReadRemoteFile'](arg1, arg2);
+}
+
+export function RenameLocalFile(arg1, arg2) {
+  return window['go']['app']['App']['RenameLocalFile'](arg1, arg2);
+}
+
+export function RenameRemoteFile(arg1, arg2, arg3) {
+  return window['go']['app']['App']['RenameRemoteFile'](arg1, arg2, arg3);
 }
 
 export function ResizeTerminal(arg1, arg2, arg3) {

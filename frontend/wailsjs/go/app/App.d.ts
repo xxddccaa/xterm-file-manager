@@ -33,6 +33,8 @@ export function ExecuteCommand(arg1:string,arg2:string):Promise<string>;
 
 export function GetCurrentDirectory(arg1:string):Promise<string>;
 
+export function GetDebugLogPath():Promise<string>;
+
 export function GetDefaultEditorDirectory():Promise<string>;
 
 export function GetHomeDirectory():Promise<string>;
@@ -58,6 +60,10 @@ export function OpenFileDialog():Promise<string>;
 export function ReadLocalFile(arg1:string):Promise<string>;
 
 export function ReadRemoteFile(arg1:string,arg2:string):Promise<string>;
+
+export function RenameLocalFile(arg1:string,arg2:string):Promise<void>;
+
+export function RenameRemoteFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
 

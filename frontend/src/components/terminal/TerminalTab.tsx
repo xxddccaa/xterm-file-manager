@@ -3,7 +3,7 @@ import { Layout, Input, Button, List, Spin, message } from 'antd'
 import { SearchOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
-import { ConnectSSH, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings } from '../../../wailsjs/go/app/App'
+import { ConnectSSH, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import Terminal from './Terminal'
 import FileManager from '../file-manager/FileManager'
@@ -172,9 +172,7 @@ const TerminalTab: React.FC = () => {
     // Explicitly disconnect SSH session when closing tab
     const closedSession = sessions.find(s => s.id === sessionId)
     if (closedSession && closedSession.type === 'ssh') {
-      if ((window as any).go?.app?.App?.DisconnectSSH) {
-        (window as any).go.app.App.DisconnectSSH(sessionId).catch(console.error)
-      }
+      DisconnectSSH(sessionId).catch(console.error)
     }
   }
 
@@ -235,11 +233,9 @@ const TerminalTab: React.FC = () => {
     
     try {
       message.loading({ content: `Downloading ${remotePath}...`, key: 'transfer', duration: 0 })
-      if ((window as any).go?.app?.App?.DownloadFile) {
-        const result = await (window as any).go.app.App.DownloadFile(activeSessionId, remotePath, localDir)
-        message.success({ content: `Downloaded to ${result}`, key: 'transfer' })
-        setLocalRefreshKey(k => k + 1)
-      }
+      const result = await DownloadFile(activeSessionId, remotePath, localDir)
+      message.success({ content: `Downloaded to ${result}`, key: 'transfer' })
+      setLocalRefreshKey(k => k + 1)
     } catch (err: any) {
       message.error({ content: `Download failed: ${err?.message || err}`, key: 'transfer' })
     }
@@ -250,11 +246,9 @@ const TerminalTab: React.FC = () => {
     
     try {
       message.loading({ content: `Uploading ${localPath}...`, key: 'transfer', duration: 0 })
-      if ((window as any).go?.app?.App?.UploadFile) {
-        const result = await (window as any).go.app.App.UploadFile(activeSessionId, localPath, remoteDir)
-        message.success({ content: `Uploaded to ${result}`, key: 'transfer' })
-        setRemoteRefreshKey(k => k + 1)
-      }
+      const result = await UploadFile(activeSessionId, localPath, remoteDir)
+      message.success({ content: `Uploaded to ${result}`, key: 'transfer' })
+      setRemoteRefreshKey(k => k + 1)
     } catch (err: any) {
       message.error({ content: `Upload failed: ${err?.message || err}`, key: 'transfer' })
     }
