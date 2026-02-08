@@ -3,6 +3,10 @@
 import {app} from '../models';
 import {context} from '../models';
 
+export function AddSyncRule(arg1:app.SyncRule):Promise<app.SyncRule>;
+
+export function CheckRemoteSyncDeps(arg1:string):Promise<app.RemoteDepsStatus>;
+
 export function ClearDebugLog():Promise<void>;
 
 export function CloseTerminalSession(arg1:string):Promise<void>;
@@ -47,6 +51,8 @@ export function GetRemoteHomeDir(arg1:string):Promise<string>;
 
 export function GetSSHConfig():Promise<Array<app.SSHConfigEntry>>;
 
+export function GetSyncRules():Promise<Array<app.SyncRule>>;
+
 export function GetTerminalSettings():Promise<string>;
 
 export function ListFiles(arg1:string,arg2:string):Promise<Array<app.FileInfo>>;
@@ -61,11 +67,15 @@ export function ReadLocalFile(arg1:string):Promise<string>;
 
 export function ReadRemoteFile(arg1:string,arg2:string):Promise<string>;
 
+export function RemoveSyncRule(arg1:string):Promise<void>;
+
 export function RenameLocalFile(arg1:string,arg2:string):Promise<void>;
 
 export function RenameRemoteFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function SetSyncSource(arg1:string,arg2:string):Promise<void>;
 
 export function SetTerminalSettings(arg1:string):Promise<void>;
 
@@ -75,9 +85,15 @@ export function StartEditorServer():Promise<void>;
 
 export function StartLocalTerminalSession(arg1:string,arg2:number,arg3:number):Promise<void>;
 
+export function StartSync(arg1:string):Promise<void>;
+
 export function StartTerminalSession(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function Startup(arg1:context.Context):Promise<void>;
+
+export function StopSync(arg1:string):Promise<void>;
+
+export function UpdateSyncRule(arg1:app.SyncRule):Promise<void>;
 
 export function UploadFile(arg1:string,arg2:string,arg3:string):Promise<string>;
 

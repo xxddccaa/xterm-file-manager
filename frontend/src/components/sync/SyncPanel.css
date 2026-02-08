@@ -1,0 +1,375 @@
+.sync-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+/* Header */
+.sync-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.sync-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sync-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.sync-summary {
+  font-size: 12px;
+  color: #888;
+}
+
+.sync-summary .ant-badge-status-text {
+  color: #aaa;
+  font-size: 12px;
+}
+
+/* Rules section */
+.sync-rules {
+  flex-shrink: 0;
+  max-height: 50%;
+  overflow-y: auto;
+  border-bottom: 1px solid #333;
+}
+
+.sync-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #2a2a2a;
+  transition: background 0.2s;
+}
+
+.sync-rule-row:hover {
+  background: #252525;
+}
+
+.sync-rule-draft {
+  background: #1a1a2e;
+  border-bottom: none;
+}
+
+.rule-error {
+  border-left: 3px solid #ff4d4f;
+}
+
+.rule-server {
+  flex: 0 0 120px;
+  min-width: 0;
+}
+
+.rule-server-name {
+  font-size: 12px;
+  color: #1890ff;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.server-select {
+  width: 100%;
+}
+
+.server-select .ant-select-selector {
+  background: #2a2a2a !important;
+  border-color: #444 !important;
+  color: #e0e0e0 !important;
+  font-size: 12px !important;
+}
+
+.rule-paths {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rule-path-input {
+  flex: 1;
+  font-size: 12px !important;
+}
+
+.rule-path-input .ant-input {
+  background: #2a2a2a !important;
+  border-color: #444 !important;
+  color: #e0e0e0 !important;
+  font-size: 12px !important;
+}
+
+.rule-path-input .ant-input[readonly] {
+  cursor: default;
+}
+
+.path-label {
+  font-size: 10px;
+  color: #888;
+  user-select: none;
+}
+
+.rule-source {
+  flex: 0 0 140px;
+}
+
+.source-select {
+  width: 100%;
+}
+
+.source-select .ant-select-selector {
+  background: #2a2a2a !important;
+  border-color: #444 !important;
+  color: #e0e0e0 !important;
+  font-size: 12px !important;
+}
+
+.rule-status {
+  flex: 0 0 90px;
+  text-align: center;
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.status-text {
+  font-size: 11px;
+  color: #aaa;
+}
+
+.rule-actions {
+  flex: 0 0 100px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.rule-delete-btn {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.rule-delete-btn:hover {
+  opacity: 1;
+}
+
+/* Log section */
+.sync-log-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sync-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.sync-log-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ccc;
+}
+
+.sync-log-list {
+  flex: 1;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.sync-log-empty {
+  text-align: center;
+  color: #666;
+  padding: 24px;
+  font-size: 12px;
+}
+
+.sync-log-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 16px;
+  line-height: 1.6;
+}
+
+.sync-log-entry:hover {
+  background: #252525;
+}
+
+.log-time {
+  color: #666;
+  flex-shrink: 0;
+  width: 65px;
+}
+
+.log-icon {
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+
+.log-content {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.log-file {
+  color: #4ec9b0;
+}
+
+.log-direction {
+  color: #888;
+  font-size: 10px;
+}
+
+.log-message {
+  color: #ccc;
+}
+
+/* Log status colors */
+.log-success .log-icon {
+  color: #52c41a;
+}
+
+.log-error .log-icon {
+  color: #ff4d4f;
+}
+
+.log-error .log-message {
+  color: #ff4d4f;
+}
+
+.log-info .log-icon {
+  color: #1890ff;
+}
+
+/* Help modal */
+.help-content h3 {
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.help-content h4 {
+  color: #1890ff;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.help-content p {
+  color: #ccc;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.help-content ul {
+  color: #ccc;
+  font-size: 13px;
+  padding-left: 20px;
+}
+
+.help-content li {
+  margin-bottom: 4px;
+}
+
+.help-code {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 12px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  color: #4ec9b0;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 8px 0;
+}
+
+/* Ant Design dark overrides for this panel */
+.sync-panel .ant-switch {
+  background: #555;
+}
+
+.sync-panel .ant-switch-checked {
+  background: #1890ff;
+}
+
+.sync-panel .ant-btn-sm {
+  font-size: 12px;
+}
+
+.sync-panel .ant-select-dropdown {
+  background: #2a2a2a;
+}
+
+.sync-panel .ant-select-item {
+  color: #e0e0e0;
+}
+
+.sync-panel .ant-select-item-option-active {
+  background: #333;
+}
+
+.sync-panel .ant-select-item-option-selected {
+  background: #1a3a5c;
+}
+
+/* Scrollbar styling */
+.sync-log-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sync-log-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sync-log-list::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}
+
+.sync-log-list::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.sync-rules::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sync-rules::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sync-rules::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}

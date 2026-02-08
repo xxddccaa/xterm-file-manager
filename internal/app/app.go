@@ -44,6 +44,9 @@ func (a *App) Startup(ctx context.Context) {
 	if err := a.StartEditorServer(); err != nil {
 		log.Printf("⚠️ Failed to start editor server: %v", err)
 	}
+
+	// Initialize sync manager
+	initSyncManager(a, ctx)
 }
 
 // GetSSHConfig is exposed to the frontend via Wails

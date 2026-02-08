@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import TerminalTab from './components/terminal/TerminalTab'
 import ToolsTab from './components/tools/ToolsTab'
 import EditorTab from './components/editor/EditorTab'
+import SyncPanel from './components/sync/SyncPanel'
 import { OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime'
 import './App.css'
 
@@ -80,6 +81,11 @@ const App: React.FC = () => {
       key: 'editor',
       label: 'Editor',
       children: <EditorTab />,
+    },
+    {
+      key: 'sync',
+      label: 'Sync',
+      children: <SyncPanel />,
     },
   ]
 
