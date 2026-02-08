@@ -37,6 +37,23 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.30 - Local File Browser (2026-02-08)
+
+**New Features:**
+- Local File Browser tab (Files) with multi-tab support, Windows-style navigation (back/forward/up), breadcrumb path bar, and status bar
+- Finder drag-and-drop: drag files/folders from macOS Finder to open in Files tab
+- File operations: copy/cut/paste, rename (Enter or F2), delete, new file/folder
+- Right-click context menu for all file operations
+- Terminal integration: one-click open terminal at current directory
+- Pop-out window: drag tab out to open in native macOS NSWindow
+- Independent editor window for double-click file editing
+
+**Bug Fixes:**
+- Fixed TDZ error ("Cannot access 'u' before initialization") caused by referencing `const` before declaration in minified build
+- Fixed + button only working once (was deduplicating same-path tabs)
+- Fixed Finder drag-drop not working (missing `--wails-drop-target: drop` CSS property)
+- Added Enter key as rename shortcut (F2 doesn't work on macOS)
+
 ### v2.28 - Build Process & Paste Fix (2026-02-08)
 
 **Build Process:**

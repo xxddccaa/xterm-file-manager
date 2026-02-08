@@ -3,7 +3,7 @@ import { Layout, Input, Button, List, Spin, message } from 'antd'
 import { SearchOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
-import { ConnectSSH, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile } from '../../../wailsjs/go/app/App'
+import { ConnectSSH, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import Terminal from './Terminal'
 import FileManager from '../file-manager/FileManager'
@@ -160,6 +160,35 @@ const TerminalTab: React.FC = () => {
     }
   }
 
+  // Create a local terminal at a specific path (triggered from file browser)
+  const handleCreateLocalTerminalAtPath = async (dirPath: string) => {
+    try {
+      // Create local terminal session
+      const sessionId = await CreateLocalTerminalSession()
+      const newSession: Session = {
+        id: sessionId,
+        name: `Terminal - ${dirPath.split('/').pop() || 'Local'}`,
+        connected: true,
+        type: 'local',
+      }
+      setSessions(prev => [...prev, newSession])
+      setActiveSessionId(sessionId)
+
+      // Wait a moment for terminal to initialize, then cd to the directory
+      setTimeout(async () => {
+        try {
+          // Send cd command with newline
+          await WriteToTerminal(sessionId, `cd "${dirPath}"\n`)
+        } catch (err) {
+          console.error('Failed to change directory:', err)
+        }
+      }, 500)
+    } catch (error) {
+      console.error('Failed to create local terminal:', error)
+      message.error('Failed to create local terminal session')
+    }
+  }
+
   const handleCloseSession = (sessionId: string) => {
     // Note: SSH connections are now cleaned up in the backend when tab is explicitly closed
     // This prevents accidental disconnection when switching tabs
@@ -273,6 +302,18 @@ const TerminalTab: React.FC = () => {
     }
     window.addEventListener('app:clear-drag-state', clearDragHandler)
     return () => window.removeEventListener('app:clear-drag-state', clearDragHandler)
+  }, [])
+
+  // Listen for terminal open requests from file browser
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const path = (e as CustomEvent).detail?.path as string
+      if (path) {
+        handleCreateLocalTerminalAtPath(path)
+      }
+    }
+    window.addEventListener('app:open-terminal-at-path', handler)
+    return () => window.removeEventListener('app:open-terminal-at-path', handler)
   }, [])
 
   // Drag and drop visual handlers (prevent browser default + show overlay)

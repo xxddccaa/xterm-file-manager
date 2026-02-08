@@ -1,0 +1,200 @@
+.files-tab-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  position: relative;
+  --wails-drop-target: drop;
+}
+
+/* Tab Bar */
+.files-tab-bar-wrapper {
+  display: flex;
+  align-items: stretch;
+  background: #252526;
+  border-bottom: 1px solid #3e3e42;
+  flex-shrink: 0;
+}
+
+.files-tab-bar {
+  flex: 1;
+  display: flex;
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #555 #252526;
+}
+
+.files-tab-bar::-webkit-scrollbar {
+  height: 3px;
+}
+
+.files-tab-bar::-webkit-scrollbar-track {
+  background: #252526;
+}
+
+.files-tab-bar::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 2px;
+}
+
+.files-tab {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: 120px;
+  min-width: 120px;
+  max-width: 180px;
+  padding: 5px 6px;
+  background: #2d2d2d;
+  border-right: 1px solid #3e3e42;
+  border-top: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  color: #ccc;
+  font-size: 12px;
+  transition: background 0.15s;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.files-tab:hover {
+  background: #363636;
+}
+
+.files-tab.active {
+  background: #1e1e1e;
+  color: #fff;
+  border-top-color: #1890ff;
+}
+
+/* Pin first tab */
+.files-tab:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.files-tab-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #e8a838;
+}
+
+.files-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.files-tab-close {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #888;
+  font-size: 12px;
+  transition: color 0.2s;
+  padding: 2px;
+}
+
+.files-tab-close:hover {
+  color: #fff;
+  background: rgba(255, 77, 79, 0.5);
+  border-radius: 3px;
+}
+
+/* Tab list button */
+.files-tab-list-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: #888;
+  font-size: 14px;
+  background: #252526;
+  border-left: 1px solid #3e3e42;
+  transition: color 0.15s, background 0.15s;
+}
+
+.files-tab-list-btn:hover {
+  color: #fff;
+  background: #3e3e42;
+}
+
+/* New tab button */
+.files-new-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  flex-shrink: 0;
+  background: #252526;
+  border: none;
+  border-left: 1px solid #3e3e42;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.files-new-tab-btn:hover {
+  color: #fff;
+  background: #3e3e42;
+}
+
+.files-new-tab-btn .anticon {
+  font-size: 14px;
+}
+
+/* Tab Content */
+.files-tab-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.files-tab-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.files-tab-pane.active {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Empty state */
+.files-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #888;
+}
+
+.files-empty-state p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.files-empty-hint {
+  font-size: 14px !important;
+  color: #666 !important;
+}
+
+/* Dragging indicator */
+.files-tab.dragging {
+  opacity: 0.5;
+}
+
+.files-tab.drag-over {
+  background: #1890ff;
+}

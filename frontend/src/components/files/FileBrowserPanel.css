@@ -1,0 +1,275 @@
+.file-browser-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  position: relative;
+}
+
+/* Toolbar */
+.fb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #252526;
+  border-bottom: 1px solid #3e3e42;
+  flex-shrink: 0;
+}
+
+.fb-toolbar .ant-btn {
+  background: transparent;
+  border: none;
+  color: #ccc;
+}
+
+.fb-toolbar .ant-btn:hover:not(:disabled) {
+  background: #3e3e42;
+  color: #fff;
+}
+
+.fb-toolbar .ant-btn:disabled {
+  opacity: 0.3;
+}
+
+.fb-path-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  padding: 0 8px;
+  height: 28px;
+  margin: 0 6px;
+  overflow: hidden;
+  cursor: text;
+}
+
+.fb-crumb {
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.fb-crumb:hover {
+  background: #3e3e42;
+  color: #fff;
+}
+
+.fb-crumb-sep {
+  color: #666;
+  font-size: 11px;
+  margin: 0 2px;
+}
+
+.fb-path-input {
+  flex: 1;
+  margin: 0 6px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+.fb-toolbar-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* File List */
+.fb-file-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+}
+
+.fb-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: #c0c0c0;
+  transition: background 0.1s;
+}
+
+.fb-file-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.fb-file-item.fb-selected {
+  background: rgba(24, 144, 255, 0.15);
+  border: 1px solid rgba(24, 144, 255, 0.3);
+  padding: 4px 9px;
+}
+
+.fb-file-item.fb-dir {
+  color: #e0e0e0;
+}
+
+.fb-file-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fb-icon-folder {
+  color: #e8a838;
+}
+
+.fb-icon-file {
+  color: #888;
+}
+
+.fb-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-file-name-input {
+  flex: 1;
+  font-size: 12px;
+  background: #1a1a1a;
+  border: 1px solid #1890ff;
+  border-radius: 3px;
+  color: #e0e0e0;
+  padding: 1px 4px;
+  outline: none;
+  font-family: inherit;
+  min-width: 0;
+  height: 22px;
+  box-sizing: border-box;
+}
+
+.fb-file-date {
+  color: #666;
+  font-size: 11px;
+  min-width: 140px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.fb-file-size {
+  color: #777;
+  font-size: 11px;
+  min-width: 70px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.fb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Status Bar */
+.fb-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 12px;
+  background: #007acc;
+  font-size: 11px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.fb-status-path {
+  font-family: 'Monaco', 'Menlo', monospace;
+  opacity: 0.9;
+}
+
+/* Context Menu */
+.fb-context-menu {
+  position: fixed;
+  background: #2d2d2d;
+  border: 1px solid #4d4d4d;
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  animation: fb-menu-fade-in 0.12s ease-out;
+}
+
+@keyframes fb-menu-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.fb-context-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fb-context-item:hover {
+  background: rgba(24, 144, 255, 0.15);
+  color: #1890ff;
+}
+
+.fb-context-item .anticon {
+  font-size: 14px;
+}
+
+.fb-context-divider {
+  height: 1px;
+  background: #4d4d4d;
+  margin: 4px 0;
+}
+
+.fb-context-item.danger {
+  color: #ff4d4f;
+}
+
+.fb-context-item.danger:hover {
+  background: rgba(255, 77, 79, 0.15);
+  color: #ff7875;
+}
+
+/* Scrollbar */
+.fb-file-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fb-file-list::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.fb-file-list::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 4px;
+}
+
+.fb-file-list::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

@@ -1,5 +1,19 @@
 export namespace app {
 	
+	export class ClipboardData {
+	    files: string[];
+	    operation: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClipboardData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.files = source["files"];
+	        this.operation = source["operation"];
+	    }
+	}
 	export class FileInfo {
 	    name: string;
 	    size: number;

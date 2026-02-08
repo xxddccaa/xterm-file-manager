@@ -131,20 +131,20 @@ func main() {
 	startupFunc := func(ctx context.Context) {
 		// Call app.Startup first
 		appInstance.Startup(ctx)
-		
+
 		// Initialize menu items from settings
 		settingsJSON, err := appInstance.GetTerminalSettings()
 		if err != nil {
 			log.Printf("Failed to get settings on startup: %v", err)
 			return
 		}
-		
+
 		var settings app.TerminalSettings
 		if err := json.Unmarshal([]byte(settingsJSON), &settings); err != nil {
 			log.Printf("Failed to parse settings on startup: %v", err)
 			return
 		}
-		
+
 		// Update menu item checked states
 		toggleSelectToCopy.Checked = settings.EnableSelectToCopy
 		toggleRightClickPaste.Checked = settings.EnableRightClickPaste
@@ -174,7 +174,7 @@ func main() {
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
 		},
-		EnableDefaultContextMenu: false,
+		EnableDefaultContextMenu:         false,
 		EnableFraudulentWebsiteDetection: false,
 	})
 

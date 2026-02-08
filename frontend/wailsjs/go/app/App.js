@@ -22,6 +22,18 @@ export function ConnectSSH(arg1) {
   return window['go']['app']['App']['ConnectSSH'](arg1);
 }
 
+export function CopyLocalDirectory(arg1, arg2) {
+  return window['go']['app']['App']['CopyLocalDirectory'](arg1, arg2);
+}
+
+export function CopyLocalFile(arg1, arg2) {
+  return window['go']['app']['App']['CopyLocalFile'](arg1, arg2);
+}
+
+export function CreateLocalDirectory(arg1) {
+  return window['go']['app']['App']['CreateLocalDirectory'](arg1);
+}
+
 export function CreateLocalFile(arg1) {
   return window['go']['app']['App']['CreateLocalFile'](arg1);
 }
@@ -78,6 +90,10 @@ export function GetDefaultEditorDirectory() {
   return window['go']['app']['App']['GetDefaultEditorDirectory']();
 }
 
+export function GetFileClipboard() {
+  return window['go']['app']['App']['GetFileClipboard']();
+}
+
 export function GetHomeDirectory() {
   return window['go']['app']['App']['GetHomeDirectory']();
 }
@@ -88,6 +104,10 @@ export function GetNextUntitledFileName(arg1) {
 
 export function GetOpenEditorCount() {
   return window['go']['app']['App']['GetOpenEditorCount']();
+}
+
+export function GetParentDirectory(arg1) {
+  return window['go']['app']['App']['GetParentDirectory'](arg1);
 }
 
 export function GetRemoteHomeDir(arg1) {
@@ -106,6 +126,10 @@ export function GetTerminalSettings() {
   return window['go']['app']['App']['GetTerminalSettings']();
 }
 
+export function IsDirectory(arg1) {
+  return window['go']['app']['App']['IsDirectory'](arg1);
+}
+
 export function ListFiles(arg1, arg2) {
   return window['go']['app']['App']['ListFiles'](arg1, arg2);
 }
@@ -114,12 +138,28 @@ export function ListLocalFiles(arg1) {
   return window['go']['app']['App']['ListLocalFiles'](arg1);
 }
 
+export function MoveLocalFile(arg1, arg2) {
+  return window['go']['app']['App']['MoveLocalFile'](arg1, arg2);
+}
+
 export function OpenEditorWindow(arg1, arg2, arg3) {
   return window['go']['app']['App']['OpenEditorWindow'](arg1, arg2, arg3);
 }
 
+export function OpenFileBrowserWindow(arg1) {
+  return window['go']['app']['App']['OpenFileBrowserWindow'](arg1);
+}
+
 export function OpenFileDialog() {
   return window['go']['app']['App']['OpenFileDialog']();
+}
+
+export function OpenTerminalAtPath(arg1) {
+  return window['go']['app']['App']['OpenTerminalAtPath'](arg1);
+}
+
+export function PasteFiles(arg1) {
+  return window['go']['app']['App']['PasteFiles'](arg1);
 }
 
 export function ReadLocalFile(arg1) {
@@ -144,6 +184,10 @@ export function RenameRemoteFile(arg1, arg2, arg3) {
 
 export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['app']['App']['ResizeTerminal'](arg1, arg2, arg3);
+}
+
+export function SetFileClipboard(arg1, arg2) {
+  return window['go']['app']['App']['SetFileClipboard'](arg1, arg2);
 }
 
 export function SetSyncSource(arg1, arg2) {

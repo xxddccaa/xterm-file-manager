@@ -13,6 +13,12 @@ export function CloseTerminalSession(arg1:string):Promise<void>;
 
 export function ConnectSSH(arg1:app.SSHConfigEntry):Promise<string>;
 
+export function CopyLocalDirectory(arg1:string,arg2:string):Promise<void>;
+
+export function CopyLocalFile(arg1:string,arg2:string):Promise<void>;
+
+export function CreateLocalDirectory(arg1:string):Promise<void>;
+
 export function CreateLocalFile(arg1:string):Promise<void>;
 
 export function CreateLocalTerminalSession():Promise<string>;
@@ -41,11 +47,15 @@ export function GetDebugLogPath():Promise<string>;
 
 export function GetDefaultEditorDirectory():Promise<string>;
 
+export function GetFileClipboard():Promise<app.ClipboardData>;
+
 export function GetHomeDirectory():Promise<string>;
 
 export function GetNextUntitledFileName(arg1:string):Promise<string>;
 
 export function GetOpenEditorCount():Promise<number>;
+
+export function GetParentDirectory(arg1:string):Promise<string>;
 
 export function GetRemoteHomeDir(arg1:string):Promise<string>;
 
@@ -55,13 +65,23 @@ export function GetSyncRules():Promise<Array<app.SyncRule>>;
 
 export function GetTerminalSettings():Promise<string>;
 
+export function IsDirectory(arg1:string):Promise<boolean>;
+
 export function ListFiles(arg1:string,arg2:string):Promise<Array<app.FileInfo>>;
 
 export function ListLocalFiles(arg1:string):Promise<Array<app.LocalFileInfo>>;
 
+export function MoveLocalFile(arg1:string,arg2:string):Promise<void>;
+
 export function OpenEditorWindow(arg1:string,arg2:boolean,arg3:string):Promise<void>;
 
+export function OpenFileBrowserWindow(arg1:string):Promise<void>;
+
 export function OpenFileDialog():Promise<string>;
+
+export function OpenTerminalAtPath(arg1:string):Promise<void>;
+
+export function PasteFiles(arg1:string):Promise<void>;
 
 export function ReadLocalFile(arg1:string):Promise<string>;
 
@@ -74,6 +94,8 @@ export function RenameLocalFile(arg1:string,arg2:string):Promise<void>;
 export function RenameRemoteFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function SetFileClipboard(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function SetSyncSource(arg1:string,arg2:string):Promise<void>;
 

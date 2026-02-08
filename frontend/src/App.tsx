@@ -6,7 +6,8 @@ import TerminalTab from './components/terminal/TerminalTab'
 import ToolsTab from './components/tools/ToolsTab'
 import EditorTab from './components/editor/EditorTab'
 import SyncPanel from './components/sync/SyncPanel'
-import { OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime'
+import FilesTab from './components/files/FilesTab'
+import { OnFileDrop, OnFileDropOff, EventsOn } from '../wailsjs/runtime/runtime'
 import './App.css'
 
 const App: React.FC = () => {
@@ -52,12 +53,33 @@ const App: React.FC = () => {
         window.dispatchEvent(new CustomEvent('app:file-drop-editor', { detail: { paths } }))
       } else if (tab === 'terminal') {
         window.dispatchEvent(new CustomEvent('app:file-drop-terminal', { detail: { paths } }))
+      } else if (tab === 'files') {
+        window.dispatchEvent(new CustomEvent('app:file-drop-files', { detail: { paths } }))
       }
     }, true)
 
     return () => {
       console.log('🧹 [App] Cleaning up global OnFileDrop listener')
       OnFileDropOff()
+    }
+  }, [wailsReady])
+
+  // Listen for terminal open requests from file browser
+  useEffect(() => {
+    if (!wailsReady) return
+
+    const cleanup = EventsOn('files:open-terminal', (dirPath: string) => {
+      console.log('🖥️ Opening terminal at:', dirPath)
+      // Switch to terminal tab
+      setActiveTab('terminal')
+      // Dispatch event to TerminalTab to open a local terminal at this path
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('app:open-terminal-at-path', { detail: { path: dirPath } }))
+      }, 100)
+    })
+
+    return () => {
+      cleanup()
     }
   }, [wailsReady])
 
@@ -86,6 +108,11 @@ const App: React.FC = () => {
       key: 'sync',
       label: 'Sync',
       children: <SyncPanel />,
+    },
+    {
+      key: 'files',
+      label: 'Files',
+      children: <FilesTab />,
     },
   ]
 
