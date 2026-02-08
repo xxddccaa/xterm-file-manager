@@ -4,7 +4,7 @@ import { SearchOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
-import { ConnectSSH, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal } from '../../../wailsjs/go/app/App'
+import { ConnectSSH, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal, CloseTerminalSession } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import Terminal from './Terminal'
 import FileManager from '../file-manager/FileManager'
@@ -18,6 +18,7 @@ interface Session {
   name: string
   connected: boolean
   type: 'ssh' | 'local'
+  initialDir?: string  // Optional initial directory for local terminals
 }
 
 interface TerminalSettings {
@@ -66,7 +67,19 @@ const TerminalTab: React.FC = () => {
       setTerminalSettings(settings)
     })
     
-    return cleanup
+    // Listen for terminal disconnections to update session status
+    const cleanupDisconnect = EventsOn('terminal:disconnected', (payload: any) => {
+      if (payload && payload.sessionId) {
+        setSessions(prev => prev.map(s => 
+          s.id === payload.sessionId ? { ...s, connected: false } : s
+        ))
+      }
+    })
+    
+    return () => {
+      cleanup()
+      cleanupDisconnect()
+    }
   }, [])
 
   const loadSSHConfig = async () => {
@@ -175,16 +188,11 @@ const TerminalTab: React.FC = () => {
       }
       setSessions(prev => [...prev, newSession])
       setActiveSessionId(sessionId)
-
-      // Wait a moment for terminal to initialize, then cd to the directory
-      setTimeout(async () => {
-        try {
-          // Send cd command with newline
-          await WriteToTerminal(sessionId, `cd "${dirPath}"\n`)
-        } catch (err) {
-          console.error('Failed to change directory:', err)
-        }
-      }, 500)
+      
+      // Store the initial directory to be used when Terminal component mounts
+      // This will be passed as a prop to the Terminal component
+      // The backend will set cmd.Dir to this directory
+      (newSession as any).initialDir = dirPath
     } catch (error) {
       console.error('Failed to create local terminal:', error)
       message.error(t('terminal:failedToCreateLocalSession'))
@@ -192,18 +200,23 @@ const TerminalTab: React.FC = () => {
   }
 
   const handleCloseSession = (sessionId: string) => {
-    // Note: SSH connections are now cleaned up in the backend when tab is explicitly closed
-    // This prevents accidental disconnection when switching tabs
+    const closedSession = sessions.find(s => s.id === sessionId)
+    
+    // Clean up backend session for all session types
+    CloseTerminalSession(sessionId).catch((err) => {
+      console.error('Failed to close terminal session:', err)
+    })
+    
+    // Also disconnect SSH connection if applicable
+    if (closedSession && closedSession.type === 'ssh') {
+      DisconnectSSH(sessionId).catch(console.error)
+    }
+    
+    // Update React state
     const remainingSessions = sessions.filter(s => s.id !== sessionId)
     setSessions(remainingSessions)
     if (activeSessionId === sessionId) {
       setActiveSessionId(remainingSessions.length > 0 ? remainingSessions[0].id : null)
-    }
-    
-    // Explicitly disconnect SSH session when closing tab
-    const closedSession = sessions.find(s => s.id === sessionId)
-    if (closedSession && closedSession.type === 'ssh') {
-      DisconnectSSH(sessionId).catch(console.error)
     }
   }
 
@@ -491,6 +504,7 @@ const TerminalTab: React.FC = () => {
                         isActive={isActive}
                         enableSelectToCopy={terminalSettings.enableSelectToCopy}
                         enableRightClickPaste={terminalSettings.enableRightClickPaste}
+                        initialDir={session.initialDir}
                       />
                     </div>
                   </div>
@@ -546,15 +560,16 @@ const TerminalTab: React.FC = () => {
                     <span className="pane-title">{t('common:terminal')}</span>
                     <span className="pane-info">{session.name}</span>
                   </div>
-                  <div className="pane-content">
-                    <Terminal
-                      sessionId={session.id}
-                      sessionType={session.type}
-                      isActive={isActive}
-                      enableSelectToCopy={terminalSettings.enableSelectToCopy}
-                      enableRightClickPaste={terminalSettings.enableRightClickPaste}
-                    />
-                  </div>
+                   <div className="pane-content">
+                     <Terminal
+                       sessionId={session.id}
+                       sessionType={session.type}
+                       isActive={isActive}
+                       enableSelectToCopy={terminalSettings.enableSelectToCopy}
+                       enableRightClickPaste={terminalSettings.enableRightClickPaste}
+                       initialDir={session.initialDir}
+                     />
+                   </div>
                 </div>
 
                 {/* Divider 1 */}

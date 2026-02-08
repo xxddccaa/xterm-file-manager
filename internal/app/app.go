@@ -56,7 +56,7 @@ func (a *App) GetSSHConfig() []SSHConfigEntry {
 
 // CreateLocalTerminalSession creates a new local terminal session and returns the session ID
 func (a *App) CreateLocalTerminalSession() (string, error) {
-	sessionID := fmt.Sprintf("local-%d", time.Now().Unix())
+	sessionID := fmt.Sprintf("local-%d", time.Now().UnixNano())
 
 	// The actual terminal session will be started when StartLocalTerminalSession is called
 	// For now, we just return the session ID

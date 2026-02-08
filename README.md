@@ -37,6 +37,34 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.33 - Terminal Improvements & Windows Support (2026-02-08)
+
+**Critical Fixes:**
+- **Windows Local Terminal Support**: Implemented Windows ConPTY support for local terminals
+  - Created platform-specific PTY implementations (`pty_unix.go` / `pty_windows.go`)
+  - Windows now supports cmd.exe, PowerShell Core, and PowerShell 5
+  - Fixed terminal not working on Windows at all
+- **Linux Shell Fallback**: Fixed shell default (macOS → `/bin/zsh`, Linux → `/bin/bash`)
+- **Session Cleanup Leak**: Fixed local terminal process leak when closing tabs
+- **Double-Close Panic**: Added `sync.Once` guard to prevent `stopChan` double-close panic
+
+**Improvements:**
+- **Session ID Collision Fix**: Changed from `Unix()` to `UnixNano()` for unique IDs
+- **Dead Code Cleanup**: Removed unused WebSocket field/import, deleted `SessionView.tsx`
+- **File Rename**: `websocket_handler.go` → `terminal_handler.go` (more accurate)
+- **Path Injection Fix**: Accept `initialDir` parameter in `StartLocalTerminalSession()` (safer than sending `cd` commands)
+- **Disconnection Notification**: Backend emits `terminal:disconnected` event, terminal shows red disconnect message
+- **Windows Keyboard Fixes**: Platform detection, `macOptionIsMeta` conditional, added Ctrl+Shift+C/V support (Linux/Windows terminal convention)
+
+**New Dependencies:**
+- Added: `github.com/UserExistsError/conpty` v0.1.4 (Windows ConPTY)
+- Removed: `github.com/gorilla/websocket` (unused)
+
+**Files Changed:**
+- Backend: `internal/app/terminal_handler.go`, `internal/app/pty_unix.go` (new), `internal/app/pty_windows.go` (new), `internal/app/app.go`
+- Frontend: `frontend/src/components/terminal/Terminal.tsx`, `frontend/src/components/terminal/TerminalTab.tsx`
+- Documentation: Added `BUILD.md`, `docs/BUILD-RELEASE.md`, `docs/VERSION-RELEASE.md`, `build-release.sh` script
+
 ### v2.32 - Internationalization (i18n) Support (2026-02-08)
 
 **New Features:**
@@ -303,6 +331,11 @@ After removing the quarantine attribute, you can:
 - Node.js 18+
 - Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 
+### Quick Links
+
+- **📦 [发版编译指南](docs/BUILD-RELEASE.md)** - 如何编译发版到 `build/releases/`
+- **🚀 开发模式** - 下面是开发相关的命令
+
 ### Setup
 
 ```bash
@@ -348,6 +381,36 @@ wails dev
 > **Note**: Do NOT delete the entire `frontend/dist/` directory — it contains a `gitkeep` file needed by Go's `//go:embed` directive. Only delete the build outputs inside it.
 
 ### Production Build
+
+#### 🚀 一键发版编译（推荐）
+
+使用自动化脚本编译发版到 `build/releases/` 目录：
+
+```bash
+# macOS Apple Silicon (M1/M2/M3) - 默认
+./build-release.sh
+
+# 或者指定平台
+./build-release.sh darwin-arm64   # macOS Apple Silicon
+./build-release.sh darwin-amd64   # macOS Intel
+./build-release.sh windows        # Windows 64-bit
+./build-release.sh linux          # Linux 64-bit
+./build-release.sh all            # 编译所有平台
+```
+
+**脚本自动完成：**
+1. ✅ 清理所有缓存（Vite、build 产物）
+2. ✅ 检查并安装依赖
+3. ✅ 编译指定平台
+4. ✅ 打包到 `build/releases/`
+5. ✅ 显示文件大小和路径
+
+**输出文件格式：**
+- macOS: `xterm-file-manager-v{version}-darwin-arm64.zip`（包含 .app）
+- Windows: `xterm-file-manager-v{version}-windows-amd64.exe`
+- Linux: `xterm-file-manager-v{version}-linux-amd64.tar.gz`
+
+#### 📝 手动编译（开发测试用）
 
 **Every build must follow these steps**, otherwise you may get stale cached code:
 

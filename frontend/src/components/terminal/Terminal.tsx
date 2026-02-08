@@ -14,6 +14,7 @@ interface TerminalProps {
   isActive: boolean
   enableSelectToCopy: boolean
   enableRightClickPaste: boolean
+  initialDir?: string  // Optional initial working directory for local terminals
 }
 
 const Terminal: React.FC<TerminalProps> = ({
@@ -22,6 +23,7 @@ const Terminal: React.FC<TerminalProps> = ({
   isActive,
   enableSelectToCopy,
   enableRightClickPaste,
+  initialDir = '',
 }) => {
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
@@ -129,7 +131,7 @@ const Terminal: React.FC<TerminalProps> = ({
       // Enable bracketed paste mode for better multiline paste handling
       // This allows shells like zsh to show @zsh (1-5) indicators
       allowTransparency: false,
-      macOptionIsMeta: true, // Allow Option key as Meta on macOS
+      macOptionIsMeta: navigator.platform.toUpperCase().indexOf('MAC') >= 0, // Only true on macOS
       scrollback: 10000,
     })
 
@@ -158,7 +160,7 @@ const Terminal: React.FC<TerminalProps> = ({
           // won't send a redundant ResizeTerminal with the same values
           lastDimensionsRef.current = { rows: dimensions.rows, cols: dimensions.cols }
           if (sessionType === 'local') {
-            await StartLocalTerminalSession(sessionId, dimensions.rows, dimensions.cols)
+            await StartLocalTerminalSession(sessionId, dimensions.rows, dimensions.cols, initialDir || '')
           } else {
             await StartTerminalSession(sessionId, dimensions.rows, dimensions.cols)
           }
@@ -179,6 +181,13 @@ const Terminal: React.FC<TerminalProps> = ({
       }
     })
 
+    // Listen for terminal disconnection
+    const cleanupDisconnect = EventsOn('terminal:disconnected', (payload: any) => {
+      if (payload && payload.sessionId === sessionId) {
+        term.writeln('\r\n\x1b[31m[Session disconnected: ' + (payload.reason || 'Unknown reason') + ']\x1b[0m')
+      }
+    })
+
     // Handle terminal input
     term.onData((data: string) => {
       WriteToTerminal(sessionId, data).catch((err) => {
@@ -188,7 +197,19 @@ const Terminal: React.FC<TerminalProps> = ({
 
     // Handle keyboard shortcuts for copy/paste
     // IMPORTANT: Only process keydown events to prevent double-firing
-    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+    // Use modern platform detection (navigator.userAgent fallback for compatibility)
+    const isMac = (() => {
+      if (typeof navigator !== 'undefined') {
+        // Try modern API first
+        const userAgentData = (navigator as any).userAgentData
+        if (userAgentData && userAgentData.platform) {
+          return userAgentData.platform.toUpperCase().indexOf('MAC') >= 0
+        }
+        // Fallback to deprecated navigator.platform
+        return navigator.platform.toUpperCase().indexOf('MAC') >= 0
+      }
+      return false
+    })()
     const normalizeKey = (value: string) => (value.length === 1 ? value.toLowerCase() : value)
     const isKey = (event: KeyboardEvent, key: string, code: string) =>
       normalizeKey(event.key) === key || event.code === code
@@ -241,6 +262,49 @@ const Terminal: React.FC<TerminalProps> = ({
         return false
       }
       
+      // Handle Ctrl+Shift+C (Linux/Windows terminal convention) - copy
+      if (!isMac && event.ctrlKey && event.shiftKey && isKey(event, 'c', 'KeyC')) {
+        const selection = term.getSelection()
+        if (selection) {
+          logger.log('✅ [Terminal] Ctrl+Shift+C detected, copying selection');
+          event.preventDefault()
+          ClipboardSetText(selection).catch((err) => {
+            logger.log('❌ [Terminal] Failed to copy:', err);
+          })
+          return false
+        }
+      }
+      
+      // Handle Ctrl+Shift+V (Linux/Windows terminal convention) - paste
+      if (!isMac && event.ctrlKey && event.shiftKey && isKey(event, 'v', 'KeyV')) {
+        logger.log('✅ [Terminal] Ctrl+Shift+V paste detected');
+        event.preventDefault()
+        ClipboardGetText().then((text) => {
+          if (text) {
+            // Detect if this is multiline content
+            const hasMultipleLines = text.includes('\n') || text.includes('\r')
+            
+            if (hasMultipleLines) {
+              // For multiline paste: use bracketed paste mode
+              const trimmedText = text.replace(/[\r\n]+$/, '')
+              const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
+              WriteToTerminal(sessionId, bracketedText).catch((err) => {
+                console.error('Failed to paste to terminal:', err)
+              })
+            } else {
+              // Single line paste: just strip trailing whitespace
+              const trimmedText = text.replace(/[\r\n]+$/, '')
+              WriteToTerminal(sessionId, trimmedText).catch((err) => {
+                console.error('Failed to paste to terminal:', err)
+              })
+            }
+          }
+        }).catch((err) => {
+          console.error('Failed to get clipboard text:', err)
+        })
+        return false
+      }
+      
       // Handle Ctrl+C - different behavior on Mac vs other platforms
       if (event.ctrlKey && isKey(event, 'c', 'KeyC') && !event.metaKey && !event.shiftKey) {
         const selection = term.getSelection()
@@ -277,7 +341,7 @@ const Terminal: React.FC<TerminalProps> = ({
       // For multiline paste, preserve internal newlines but strip trailing ones
       if ((isMac && event.metaKey && isKey(event, 'v', 'KeyV') && !event.ctrlKey) ||
           (isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey) ||
-          (!isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey)) {
+          (!isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey && !event.shiftKey)) {
         logger.log('✅ [Terminal] Paste shortcut detected');
         event.preventDefault()
         ClipboardGetText().then((text) => {
@@ -389,6 +453,7 @@ const Terminal: React.FC<TerminalProps> = ({
       resizeObserver.disconnect()
       terminalElement.removeEventListener('contextmenu', handleContextMenu)
       cleanupEvents()
+      cleanupDisconnect()
       if (xtermRef.current) {
         xtermRef.current.dispose()
         xtermRef.current = null

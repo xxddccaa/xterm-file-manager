@@ -105,7 +105,7 @@ export function ShowAllEditorWindows():Promise<void>;
 
 export function StartEditorServer():Promise<void>;
 
-export function StartLocalTerminalSession(arg1:string,arg2:number,arg3:number):Promise<void>;
+export function StartLocalTerminalSession(arg1:string,arg2:number,arg3:number,arg4:string):Promise<void>;
 
 export function StartSync(arg1:string):Promise<void>;
 

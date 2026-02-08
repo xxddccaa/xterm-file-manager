@@ -206,8 +206,8 @@ export function StartEditorServer() {
   return window['go']['app']['App']['StartEditorServer']();
 }
 
-export function StartLocalTerminalSession(arg1, arg2, arg3) {
-  return window['go']['app']['App']['StartLocalTerminalSession'](arg1, arg2, arg3);
+export function StartLocalTerminalSession(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['StartLocalTerminalSession'](arg1, arg2, arg3, arg4);
 }
 
 export function StartSync(arg1) {
