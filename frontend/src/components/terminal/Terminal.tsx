@@ -126,6 +126,8 @@ const Terminal: React.FC<TerminalProps> = ({
       },
       rightClickSelectsWord: false,
       disableStdin: false,
+      // Enable bracketed paste mode for better multiline paste handling
+      // This allows shells like zsh to show @zsh (1-5) indicators
       allowTransparency: false,
       macOptionIsMeta: true, // Allow Option key as Meta on macOS
       scrollback: 10000,
@@ -272,7 +274,7 @@ const Terminal: React.FC<TerminalProps> = ({
       }
 
       // Handle Cmd+V (Mac) / Ctrl+V (other) for paste
-      // Preserve content as-is without bracketed paste mode (causes issues in vim)
+      // For multiline paste, preserve internal newlines but strip trailing ones
       if ((isMac && event.metaKey && isKey(event, 'v', 'KeyV') && !event.ctrlKey) ||
           (isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey) ||
           (!isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey)) {
@@ -280,11 +282,28 @@ const Terminal: React.FC<TerminalProps> = ({
         event.preventDefault()
         ClipboardGetText().then((text) => {
           if (text) {
-            // Paste as-is without modification
-            // This works correctly in both shell and vim
-            WriteToTerminal(sessionId, text).catch((err) => {
-              console.error('Failed to paste to terminal:', err)
-            })
+            // Detect if this is multiline content
+            const hasMultipleLines = text.includes('\n') || text.includes('\r')
+            
+            if (hasMultipleLines) {
+              // For multiline paste: use bracketed paste mode
+              // This allows shells like zsh to show @zsh (1-5) indicators
+              // Strip only trailing newlines to prevent auto-execution
+              const trimmedText = text.replace(/[\r\n]+$/, '')
+              
+              // Send with bracketed paste escape sequences
+              // \x1b[200~ starts bracketed paste, \x1b[201~ ends it
+              const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
+              WriteToTerminal(sessionId, bracketedText).catch((err) => {
+                console.error('Failed to paste to terminal:', err)
+              })
+            } else {
+              // Single line paste: just strip trailing whitespace
+              const trimmedText = text.replace(/[\r\n]+$/, '')
+              WriteToTerminal(sessionId, trimmedText).catch((err) => {
+                console.error('Failed to paste to terminal:', err)
+              })
+            }
           }
         }).catch((err) => {
           console.error('Failed to get clipboard text:', err)
@@ -294,14 +313,12 @@ const Terminal: React.FC<TerminalProps> = ({
 
       // On Mac, let Ctrl+[key] shortcuts pass through to terminal
       // This allows Ctrl+A, Ctrl+D, Ctrl+E, Ctrl+K, Ctrl+U, Ctrl+Z, etc. to work properly
-      // IMPORTANT: Exclude Ctrl+C and Ctrl+V from this rule (already handled above)
-      if (isMac && event.ctrlKey && !event.metaKey && !event.altKey && 
-          !isKey(event, 'c', 'KeyC') && !isKey(event, 'v', 'KeyV')) {
+      if (isMac && event.ctrlKey && !event.metaKey && !event.altKey && !isKey(event, 'c', 'KeyC')) {
         logger.log('✅ [Terminal] Ctrl+' + normalizeKey(event.key).toUpperCase() + ' passing through to terminal');
-        return true // Let terminal handle Ctrl shortcuts
+        return true // Let terminal handle Ctrl shortcuts (except Ctrl+C which we handled above)
       }
 
-      // Allow all other keys (including Backspace, Delete, arrow keys, etc.) to pass through
+      // Allow all other keys to pass through to terminal
       return true
     })
 
@@ -328,9 +345,22 @@ const Terminal: React.FC<TerminalProps> = ({
         try {
           const text = await ClipboardGetText()
           if (text) {
-            // Paste as-is without modification
-            // This works correctly in both shell and vim
-            await WriteToTerminal(sessionId, text)
+            // Detect if this is multiline content
+            const hasMultipleLines = text.includes('\n') || text.includes('\r')
+            
+            if (hasMultipleLines) {
+              // For multiline paste: use bracketed paste mode
+              // Strip only trailing newlines to prevent auto-execution
+              const trimmedText = text.replace(/[\r\n]+$/, '')
+              
+              // Send with bracketed paste escape sequences
+              const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
+              await WriteToTerminal(sessionId, bracketedText)
+            } else {
+              // Single line paste: just strip trailing whitespace
+              const trimmedText = text.replace(/[\r\n]+$/, '')
+              await WriteToTerminal(sessionId, trimmedText)
+            }
           }
         } catch (err) {
           console.error('Failed to paste from clipboard:', err)
@@ -369,49 +399,6 @@ const Terminal: React.FC<TerminalProps> = ({
       // the guard fails and startSession runs twice, creating duplicate PTYs.
     }
   }, [sessionId, sessionType, handleResize])
-
-  // Listen for file drop events dispatched from App-level OnFileDrop
-  useEffect(() => {
-    if (!isActive) return
-
-    logger.log('🎯 [Terminal] Setting up file drop listener for session:', sessionId)
-    
-    const handler = (e: Event) => {
-      const paths = (e as CustomEvent).detail?.paths as string[]
-      logger.log('📥 [Terminal] File drop received, paths:', paths)
-
-      if (!paths || paths.length === 0) {
-        logger.log('⚠️ [Terminal] No paths received in drop event')
-        return
-      }
-
-      // Write each file path to the terminal
-      // For multiple files, separate them with spaces (like shell argument list)
-      // Escape paths with spaces by wrapping in quotes
-      const escapedPaths = paths.map(path => {
-        // If path contains spaces, wrap in quotes
-        if (path.includes(' ')) {
-          return `"${path}"`
-        }
-        return path
-      })
-      
-      const pathsText = escapedPaths.join(' ')
-      
-      WriteToTerminal(sessionId, pathsText).catch((err) => {
-        console.error('Failed to write file path to terminal:', err)
-      })
-
-      logger.log('✅ [Terminal] File paths written to terminal:', pathsText)
-    }
-
-    window.addEventListener('app:file-drop-terminal', handler)
-
-    return () => {
-      logger.log('🧹 [Terminal] Cleaning up file drop listener')
-      window.removeEventListener('app:file-drop-terminal', handler)
-    }
-  }, [sessionId, isActive])
 
   return <div ref={terminalRef} className="terminal-container" />
 }

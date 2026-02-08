@@ -221,7 +221,7 @@ killall karabiner_console_user_server
 
 ```bash
 # 清空日志
-rm -f /tmp/xterm-file-manager-debug.log
+rm -f ~/Library/Logs/xterm-file-manager/debug.log
 
 # 启动应用
 open /Users/xd/Documents/xiedong_dev/mac_code/xterm-file-manager/build/bin/xterm-file-manager.app
@@ -229,7 +229,7 @@ open /Users/xd/Documents/xiedong_dev/mac_code/xterm-file-manager/build/bin/xterm
 # 等待几秒，然后操作应用（按 F2、Ctrl+C 等）
 
 # 查看日志
-tail -f /tmp/xterm-file-manager-debug.log
+tail -f ~/Library/Logs/xterm-file-manager/debug.log
 ```
 
 **期望看到的日志**：
@@ -281,7 +281,7 @@ cat /Users/xd/Documents/xiedong_dev/mac_code/xterm-file-manager/wails.json | gre
 3. **联系我并提供**：
    - Bundle Identifier
    - Karabiner 配置文件
-   - 应用日志 (`/tmp/xterm-file-manager-debug.log`)
+    - 应用日志 (`~/Library/Logs/xterm-file-manager/debug.log`)
    - Karabiner 日志
 
 ---
@@ -309,7 +309,7 @@ fi
 
 echo ""
 echo "2. Clearing debug log..."
-rm -f /tmp/xterm-file-manager-debug.log
+rm -f ~/Library/Logs/xterm-file-manager/debug.log
 echo "   ✅ Log cleared"
 
 echo ""
@@ -333,8 +333,8 @@ sleep 10
 
 echo ""
 echo "=== Debug Log Contents ==="
-if [ -f /tmp/xterm-file-manager-debug.log ]; then
-    cat /tmp/xterm-file-manager-debug.log
+if [ -f ~/Library/Logs/xterm-file-manager/debug.log ]; then
+    cat ~/Library/Logs/xterm-file-manager/debug.log
     echo ""
     echo "✅ Log file exists and shown above"
 else

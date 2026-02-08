@@ -28,14 +28,22 @@ wails dev
 
 ### Production Build
 ```bash
-# Build for current platform
-wails build
+# IMPORTANT: Always clean caches before building
+rm -rf build/bin/* frontend/dist/assets
+cd frontend && rm -rf node_modules/.vite .vite && cd ..
 
-# Build for specific platforms
-wails build -platform darwin/amd64     # macOS Intel
-wails build -platform darwin/arm64     # macOS Apple Silicon
-wails build -platform windows/amd64    # Windows
-wails build -platform linux/amd64      # Linux
+# Build for specific platforms (always use -clean flag)
+wails build -platform darwin/arm64 -clean    # macOS Apple Silicon
+wails build -platform darwin/amd64 -clean    # macOS Intel
+wails build -platform windows/amd64 -clean   # Windows
+wails build -platform linux/amd64 -clean     # Linux
+
+# Kill old process before opening new build (macOS reuses running instances)
+pkill -f xterm-file-manager 2>/dev/null; sleep 1
+open build/bin/xterm-file-manager.app
+
+# One-liner for quick rebuild (macOS Apple Silicon):
+# rm -rf build/bin/* frontend/dist/assets && cd frontend && rm -rf node_modules/.vite .vite && cd .. && wails build -platform darwin/arm64 -clean && pkill -f xterm-file-manager 2>/dev/null; sleep 1; open build/bin/xterm-file-manager.app
 ```
 
 ### Frontend Commands

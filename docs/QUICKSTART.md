@@ -21,21 +21,26 @@ wails dev
 ### 方法 2: 构建后运行
 
 ```bash
-# 构建应用
-wails build
+# 清理缓存 + 构建
+rm -rf build/bin/* frontend/dist/assets
+cd frontend && rm -rf node_modules/.vite .vite && cd ..
+wails build -platform darwin/arm64 -clean
 
 # 运行构建的应用
-./build/bin/xterm-file-manager.app/Contents/MacOS/xterm-file-manager
+pkill -f xterm-file-manager 2>/dev/null; sleep 1
+open build/bin/xterm-file-manager.app
 ```
 
 ## 当前功能
 
 ✅ **SSH Config 解析** - 自动读取 `~/.ssh/config`  
 ✅ **服务器列表显示** - 左侧边栏显示所有 SSH 配置  
-✅ **基础 UI** - 文件管理器和终端界面框架  
-⏳ **SSH 连接** - 待实现  
-⏳ **SFTP 文件操作** - 待实现  
-⏳ **终端交互** - 待实现  
+✅ **SSH 连接** - 点击服务器即可连接  
+✅ **SFTP 文件操作** - 远程文件浏览、上传、下载、删除、重命名  
+✅ **终端交互** - 完整的 xterm.js 终端模拟器  
+✅ **本地终端** - 支持本地 shell 终端  
+✅ **文件编辑器** - 多标签编辑器，支持 30+ 语言语法高亮  
+✅ **拖拽支持** - 拖拽文件到终端或编辑器  
 
 ## 项目结构
 
@@ -64,9 +69,4 @@ xterm-file-manager/
 
 ## 下一步开发
 
-1. 实现 SSH 连接（使用 `golang.org/x/crypto/ssh`）
-2. 实现 SFTP 文件操作
-3. 实现终端交互（WebSocket 或类似机制）
-4. 添加端口转发功能
-
-应用现在应该已经启动了！如果看到窗口，说明运行成功。
+参考 `README.md` 和 `docs/工程总结.md` 了解最新开发进展。

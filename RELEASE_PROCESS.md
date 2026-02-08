@@ -97,14 +97,16 @@ git log --oneline -10
 **重要：每次编译前必须清理缓存**，否则可能打包旧代码：
 
 ```bash
-# 清理 frontend 构建文件和缓存
+# 清理编译产物和 frontend 构建文件和缓存
+rm -rf build/bin/*
 rm -rf frontend/dist/assets
 cd frontend && rm -rf node_modules/.vite .vite
 cd ..
 ```
 
 **注意：**
-- 不要删除整个 `frontend/dist/` 目录（包含 gitkeep）
+- `build/bin/*` 可以随便删，只有编译产物
+- 不要删除整个 `frontend/dist/` 目录（包含 gitkeep，Go 的 `//go:embed` 依赖它）
 - 只删除 `dist/assets` 和 Vite 缓存目录
 
 ## 🏗️ Step 4: 编译全平台软件
@@ -117,23 +119,17 @@ cd ..
 wails build -platform darwin/amd64 -clean
 ```
 
-输出：`build/bin/xterm-file-manager.app`
-
 ### 4.2 编译 macOS Apple Silicon (darwin/arm64)
 
 ```bash
-wails build -platform darwin/arm64
+wails build -platform darwin/arm64 -clean
 ```
-
-输出：`build/bin/xterm-file-manager.app`
 
 ### 4.3 编译 Windows (windows/amd64)
 
 ```bash
-wails build -platform windows/amd64
+wails build -platform windows/amd64 -clean
 ```
-
-输出：`build/bin/xterm-file-manager.exe`
 
 ### 4.4 编译 Linux (linux/amd64)
 
@@ -141,7 +137,7 @@ wails build -platform windows/amd64
 
 ```bash
 # 在 Linux 环境下执行
-wails build -platform linux/amd64
+wails build -platform linux/amd64 -clean
 ```
 
 如果没有 Linux 环境，可以跳过此步骤。
@@ -274,9 +270,9 @@ git push --tags
 **解决：**
 ```bash
 # 彻底清理缓存
-rm -rf frontend/dist/assets frontend/node_modules/.vite frontend/.vite
+rm -rf build/bin/* frontend/dist/assets frontend/node_modules/.vite frontend/.vite
 cd frontend && npm install && cd ..
-wails build -clean -platform darwin/arm64
+wails build -platform darwin/arm64 -clean
 ```
 
 ### Q2: macOS 提示"应用已损坏"
@@ -293,10 +289,10 @@ xattr -cr /path/to/xterm-file-manager.app
 **解决：**
 ```bash
 # 重新清理并编译
-rm -rf frontend/dist/assets frontend/node_modules/.vite frontend/.vite
-wails build -clean -platform darwin/amd64
-wails build -platform darwin/arm64
-wails build -platform windows/amd64
+rm -rf build/bin/* frontend/dist/assets frontend/node_modules/.vite frontend/.vite
+wails build -platform darwin/amd64 -clean
+wails build -platform darwin/arm64 -clean
+wails build -platform windows/amd64 -clean
 ```
 
 ### Q4: 需要回滚版本

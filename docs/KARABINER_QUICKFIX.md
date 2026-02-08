@@ -86,7 +86,8 @@ cd /Users/xd/Documents/xiedong_dev/mac_code/xterm-file-manager
 ### 实时查看日志
 
 ```bash
-tail -f /tmp/xterm-file-manager-debug.log
+# macOS
+tail -f ~/Library/Logs/xterm-file-manager/debug.log
 ```
 
 ### 查看 wails dev 输出
@@ -136,7 +137,7 @@ cat /Users/xd/.cursor/projects/Users-xd-Documents-xiedong-dev-mac-code-xterm-fil
 - `test-keyboard.sh` - 自动化测试脚本（运行这个！）
 - `KARABINER_SETUP.md` - 详细的 Karabiner 配置指南
 - `karabiner-config.json` - Karabiner 配置模板
-- `/tmp/xterm-file-manager-debug.log` - 应用日志文件
+- `~/Library/Logs/xterm-file-manager/debug.log` - 应用日志文件 (macOS)
 
 ---
 
@@ -147,7 +148,7 @@ cat /Users/xd/.cursor/projects/Users-xd-Documents-xiedong-dev-mac-code-xterm-fil
 1. **Bundle ID**（第 1 步的输出）
 2. **日志内容**：
    ```bash
-   cat /tmp/xterm-file-manager-debug.log
+    cat ~/Library/Logs/xterm-file-manager/debug.log
    ```
 3. **Karabiner 状态**：
    ```bash
@@ -161,13 +162,13 @@ cat /Users/xd/.cursor/projects/Users-xd-Documents-xiedong-dev-mac-code-xterm-fil
 `wails dev` 已经在后台启动了：
 - 应用会自动打开
 - 代码修改会热重载
-- 日志会写入 `/tmp/xterm-file-manager-debug.log`
+- 日志会写入 `~/Library/Logs/xterm-file-manager/debug.log` (macOS)
 
 **现在就测试**：
 1. 选择一个文件
 2. 按 F2
 3. 查看是否弹出重命名对话框
-4. 查看日志：`tail -f /tmp/xterm-file-manager-debug.log`
+4. 查看日志：`tail -f ~/Library/Logs/xterm-file-manager/debug.log`
 
 ---
 

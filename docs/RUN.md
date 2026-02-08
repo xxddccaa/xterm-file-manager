@@ -21,9 +21,13 @@ wails dev
 - 检查是否有 "Wails runtime not available" 警告
 
 ### 4. 如果还是白屏
-- 检查 `frontend/dist` 目录是否存在
+- 检查 `frontend/dist` 目录是否存在（不要删除整个目录，只删 assets）
 - 检查 `frontend/dist/index.html` 是否正确
-- 尝试重新构建：`cd frontend && rm -rf dist && npm run build`
+- 尝试清理缓存重新构建：
+  ```bash
+  rm -rf frontend/dist/assets
+  cd frontend && rm -rf node_modules/.vite .vite && npm install && npm run build && cd ..
+  ```
 
 ### 5. 调试模式
 在 `main.go` 中，确保 `Bind: []interface{}{app}` 已设置，这样 Go 方法才能暴露给前端。

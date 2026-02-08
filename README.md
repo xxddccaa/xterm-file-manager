@@ -37,6 +37,19 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.28 - Build Process & Paste Fix (2026-02-08)
+
+**Build Process:**
+- Documented correct production build steps to avoid stale cache issues
+- Added one-liner build command for quick rebuild
+- `build/bin/*` can be safely deleted; `frontend/dist/` directory itself must be preserved (`gitkeep`)
+- Must always clean Vite cache + use `-clean` flag + kill old process before opening
+
+**Bug Fixes:**
+- Reverted Terminal.tsx paste handling to v2.25 stable version (bracketed paste mode for multiline)
+- Fixed paste in vim: removed broken "paste as-is" change that caused issues
+- Restored correct Ctrl+V exclusion from macOS Ctrl passthrough rule
+
 ### v2.27 - Security & Performance Improvements (2026-02-07)
 
 **Security Enhancements:**
@@ -283,18 +296,43 @@ wails dev
 
 ### Production Build
 
-```bash
-# Build for current platform
-wails build
+**Every build must follow these steps**, otherwise you may get stale cached code:
 
-# Build for specific platform
-wails build -platform darwin/amd64
-wails build -platform darwin/arm64
-wails build -platform windows/amd64
-wails build -platform linux/amd64
+```bash
+# Step 1: Clean all caches (REQUIRED every time)
+rm -rf build/bin/*                                          # 可以随便删，只有编译产物
+rm -rf frontend/dist/assets                                 # 只删 assets，不要删 dist/ 目录本身
+cd frontend && rm -rf node_modules/.vite .vite && cd ..     # 清 Vite 缓存
+
+# Step 2: Build
+wails build -platform darwin/arm64 -clean
+
+# Step 3: Kill old process before opening (macOS may reuse old instance)
+pkill -f xterm-file-manager 2>/dev/null; sleep 1
+
+# Step 4: Open the new build
+open build/bin/xterm-file-manager.app
 ```
 
-`wails build` automatically runs `npm install` + `npm run build` before compiling, so the production binary contains all frontend assets embedded.
+**Build for other platforms** (still need Step 1 first):
+
+```bash
+wails build -platform darwin/amd64 -clean   # macOS Intel
+wails build -platform windows/amd64 -clean  # Windows
+wails build -platform linux/amd64 -clean    # Linux
+```
+
+**One-liner for quick rebuild (macOS Apple Silicon):**
+
+```bash
+rm -rf build/bin/* frontend/dist/assets && cd frontend && rm -rf node_modules/.vite .vite && cd .. && wails build -platform darwin/arm64 -clean && pkill -f xterm-file-manager 2>/dev/null; sleep 1; open build/bin/xterm-file-manager.app
+```
+
+> **Important notes:**
+> - Always use `-clean` flag to avoid stale binaries
+> - Always clean Vite cache before building — Vite may serve old bundled JS otherwise
+> - Do NOT delete the entire `frontend/dist/` directory — it contains a `gitkeep` file needed by Go's `//go:embed`
+> - Always kill the old process before opening — macOS may reuse the already-running old instance instead of launching the new build
 
 ## Project Structure
 
