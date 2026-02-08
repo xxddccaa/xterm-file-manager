@@ -215,8 +215,18 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int) er
 	// Create command
 	cmd := exec.Command(shell)
 
-	// Set environment variables
-	cmd.Env = os.Environ()
+	// Set environment variables, filtering out Python venv variables
+	// that may have been inherited from the parent process.
+	// A child shell won't have the 'deactivate' function defined,
+	// so inheriting VIRTUAL_ENV causes errors in shell hooks.
+	cleanEnv := make([]string, 0, len(os.Environ()))
+	for _, env := range os.Environ() {
+		if len(env) >= 11 && env[:11] == "VIRTUAL_ENV" {
+			continue // skip VIRTUAL_ENV and VIRTUAL_ENV_PROMPT
+		}
+		cleanEnv = append(cleanEnv, env)
+	}
+	cmd.Env = cleanEnv
 
 	// Create PTY
 	ptmx, err := pty.Start(cmd)
