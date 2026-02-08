@@ -37,6 +37,19 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.31 - File Association & Open With (2026-02-08)
+
+**New Features:**
+- File Association: register as default app for 38+ file types (txt, json, md, yaml, go, py, js, ts, etc.)
+- macOS "Open With" support: right-click any supported file in Finder/Feishu -> Open With -> XTerm File Manager
+- macOS `OnFileOpen` callback with queue mechanism (handles files opened before app startup)
+- Windows file association via command-line args (`os.Args`), opens files in main window EditorTab
+- Cross-platform `editor:open-file` Wails event for backend-to-frontend file open requests
+
+**Platform Behavior:**
+- macOS: opens files in native NSWindow + WKWebView (Monaco Editor)
+- Windows/Linux: opens files in main window EditorTab (Monaco Editor)
+
 ### v2.30 - Local File Browser (2026-02-08)
 
 **New Features:**

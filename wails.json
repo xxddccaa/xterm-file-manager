@@ -10,5 +10,47 @@
   "author": {
     "name": "XTerm File Manager",
     "email": ""
+  },
+  "info": {
+    "fileAssociations": [
+      { "ext": "txt",  "name": "Text File",       "description": "Plain Text File",       "iconName": "appicon", "role": "Editor" },
+      { "ext": "md",   "name": "Markdown File",    "description": "Markdown File",          "iconName": "appicon", "role": "Editor" },
+      { "ext": "json", "name": "JSON File",        "description": "JSON File",              "iconName": "appicon", "role": "Editor" },
+      { "ext": "yaml", "name": "YAML File",        "description": "YAML File",              "iconName": "appicon", "role": "Editor" },
+      { "ext": "yml",  "name": "YAML File",        "description": "YAML File",              "iconName": "appicon", "role": "Editor" },
+      { "ext": "toml", "name": "TOML File",        "description": "TOML File",              "iconName": "appicon", "role": "Editor" },
+      { "ext": "xml",  "name": "XML File",         "description": "XML File",               "iconName": "appicon", "role": "Editor" },
+      { "ext": "csv",  "name": "CSV File",         "description": "CSV File",               "iconName": "appicon", "role": "Editor" },
+      { "ext": "log",  "name": "Log File",         "description": "Log File",               "iconName": "appicon", "role": "Editor" },
+      { "ext": "conf", "name": "Config File",      "description": "Configuration File",     "iconName": "appicon", "role": "Editor" },
+      { "ext": "cfg",  "name": "Config File",      "description": "Configuration File",     "iconName": "appicon", "role": "Editor" },
+      { "ext": "ini",  "name": "INI File",         "description": "INI Configuration File", "iconName": "appicon", "role": "Editor" },
+      { "ext": "env",  "name": "Env File",         "description": "Environment File",       "iconName": "appicon", "role": "Editor" },
+      { "ext": "sh",   "name": "Shell Script",     "description": "Shell Script",           "iconName": "appicon", "role": "Editor" },
+      { "ext": "bash", "name": "Bash Script",      "description": "Bash Script",            "iconName": "appicon", "role": "Editor" },
+      { "ext": "zsh",  "name": "Zsh Script",       "description": "Zsh Script",             "iconName": "appicon", "role": "Editor" },
+      { "ext": "go",   "name": "Go Source",        "description": "Go Source File",         "iconName": "appicon", "role": "Editor" },
+      { "ext": "py",   "name": "Python Source",    "description": "Python Source File",     "iconName": "appicon", "role": "Editor" },
+      { "ext": "js",   "name": "JavaScript",       "description": "JavaScript File",        "iconName": "appicon", "role": "Editor" },
+      { "ext": "ts",   "name": "TypeScript",       "description": "TypeScript File",        "iconName": "appicon", "role": "Editor" },
+      { "ext": "jsx",  "name": "JSX File",         "description": "React JSX File",         "iconName": "appicon", "role": "Editor" },
+      { "ext": "tsx",  "name": "TSX File",         "description": "React TSX File",         "iconName": "appicon", "role": "Editor" },
+      { "ext": "html", "name": "HTML File",        "description": "HTML File",              "iconName": "appicon", "role": "Editor" },
+      { "ext": "css",  "name": "CSS File",         "description": "CSS Stylesheet",         "iconName": "appicon", "role": "Editor" },
+      { "ext": "scss", "name": "SCSS File",        "description": "SCSS Stylesheet",        "iconName": "appicon", "role": "Editor" },
+      { "ext": "less", "name": "LESS File",        "description": "LESS Stylesheet",        "iconName": "appicon", "role": "Editor" },
+      { "ext": "sql",  "name": "SQL File",         "description": "SQL File",               "iconName": "appicon", "role": "Editor" },
+      { "ext": "rs",   "name": "Rust Source",      "description": "Rust Source File",       "iconName": "appicon", "role": "Editor" },
+      { "ext": "c",    "name": "C Source",          "description": "C Source File",          "iconName": "appicon", "role": "Editor" },
+      { "ext": "h",    "name": "C Header",          "description": "C Header File",          "iconName": "appicon", "role": "Editor" },
+      { "ext": "cpp",  "name": "C++ Source",        "description": "C++ Source File",        "iconName": "appicon", "role": "Editor" },
+      { "ext": "java", "name": "Java Source",      "description": "Java Source File",       "iconName": "appicon", "role": "Editor" },
+      { "ext": "rb",   "name": "Ruby Source",      "description": "Ruby Source File",       "iconName": "appicon", "role": "Editor" },
+      { "ext": "php",  "name": "PHP Source",       "description": "PHP Source File",        "iconName": "appicon", "role": "Editor" },
+      { "ext": "swift","name": "Swift Source",     "description": "Swift Source File",      "iconName": "appicon", "role": "Editor" },
+      { "ext": "kt",   "name": "Kotlin Source",    "description": "Kotlin Source File",     "iconName": "appicon", "role": "Editor" },
+      { "ext": "lua",  "name": "Lua Source",       "description": "Lua Source File",        "iconName": "appicon", "role": "Editor" },
+      { "ext": "dockerfile", "name": "Dockerfile", "description": "Dockerfile",             "iconName": "appicon", "role": "Editor" }
+    ]
   }
 }

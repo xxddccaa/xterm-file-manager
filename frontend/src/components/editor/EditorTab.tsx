@@ -137,6 +137,19 @@ const EditorTab: React.FC = () => {
     }
   }, [openFileFromPath])
 
+  // Listen for file open requests from backend (file association, command-line args)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const filePath = (e as CustomEvent).detail?.path as string
+      if (filePath) {
+        console.log('📂 [EditorTab] Opening file from external request:', filePath)
+        openFileFromPath(filePath)
+      }
+    }
+    window.addEventListener('app:open-file-in-editor', handler)
+    return () => window.removeEventListener('app:open-file-in-editor', handler)
+  }, [openFileFromPath])
+
   // Create new file
   const handleNewFile = async () => {
     const newFile: EditorFile = {

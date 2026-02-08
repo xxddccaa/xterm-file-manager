@@ -83,6 +83,25 @@ const App: React.FC = () => {
     }
   }, [wailsReady])
 
+  // Listen for file open requests from backend (Windows file association / cross-platform)
+  useEffect(() => {
+    if (!wailsReady) return
+
+    const cleanup = EventsOn('editor:open-file', (filePath: string) => {
+      console.log('📂 [App] Opening file in editor:', filePath)
+      // Switch to editor tab
+      setActiveTab('editor')
+      // Dispatch event to EditorTab to open the file
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('app:open-file-in-editor', { detail: { path: filePath } }))
+      }, 100)
+    })
+
+    return () => {
+      cleanup()
+    }
+  }, [wailsReady])
+
   // Show minimal loading screen if Wails not ready
   if (!wailsReady) {
     return <div className="loading-container" />

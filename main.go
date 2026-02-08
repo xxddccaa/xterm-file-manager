@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"runtime"
 	"runtime/debug"
+	"sync"
 
 	"xterm-file-manager/internal/app"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
@@ -37,6 +40,14 @@ func main() {
 			}
 		}
 	}()
+
+	// File open queue: OnFileOpen may fire before Startup completes,
+	// so we buffer file paths and process them after the app is ready.
+	var (
+		pendingFilesMu sync.Mutex
+		pendingFiles   []string
+		appReady       bool
+	)
 
 	// Create an instance of the app structure
 	appInstance := app.NewApp()
@@ -148,6 +159,39 @@ func main() {
 		// Update menu item checked states
 		toggleSelectToCopy.Checked = settings.EnableSelectToCopy
 		toggleRightClickPaste.Checked = settings.EnableRightClickPaste
+
+		// Process any files that were queued before Startup completed (macOS OnFileOpen)
+		pendingFilesMu.Lock()
+		appReady = true
+		filesToOpen := make([]string, len(pendingFiles))
+		copy(filesToOpen, pendingFiles)
+		pendingFiles = nil
+		pendingFilesMu.Unlock()
+
+		// On Windows, file association passes file paths as command-line arguments
+		if runtime.GOOS == "windows" {
+			argsWithoutProg := os.Args[1:]
+			for _, arg := range argsWithoutProg {
+				// Skip flags (e.g. --debug)
+				if len(arg) > 0 && arg[0] == '-' {
+					continue
+				}
+				filesToOpen = append(filesToOpen, arg)
+			}
+		}
+
+		// Open all pending files: on macOS use native editor window,
+		// on other platforms emit event to open in the main window's EditorTab
+		for _, filePath := range filesToOpen {
+			log.Printf("📂 [FileOpen] Opening queued file: %s", filePath)
+			if runtime.GOOS == "darwin" {
+				if err := appInstance.OpenEditorWindow(filePath, false, ""); err != nil {
+					log.Printf("❌ [FileOpen] Failed to open queued file %s: %v", filePath, err)
+				}
+			} else {
+				wailsRuntime.EventsEmit(ctx, "editor:open-file", filePath)
+			}
+		}
 	}
 
 	// Create application with options
@@ -173,6 +217,22 @@ func main() {
 		Mac: &mac.Options{
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
+			OnFileOpen: func(filePath string) {
+				pendingFilesMu.Lock()
+				defer pendingFilesMu.Unlock()
+
+				if appReady {
+					// App is ready, open file directly in editor
+					log.Printf("📂 [FileOpen] Opening file: %s", filePath)
+					if err := appInstance.OpenEditorWindow(filePath, false, ""); err != nil {
+						log.Printf("❌ [FileOpen] Failed to open file %s: %v", filePath, err)
+					}
+				} else {
+					// App not ready yet, queue file for later
+					log.Printf("📂 [FileOpen] App not ready, queuing file: %s", filePath)
+					pendingFiles = append(pendingFiles, filePath)
+				}
+			},
 		},
 		EnableDefaultContextMenu:         false,
 		EnableFraudulentWebsiteDetection: false,
