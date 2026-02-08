@@ -111,27 +111,58 @@ cd ..
 
 ## 🏗️ Step 4: 编译全平台软件
 
+### 方法 1: 使用自动化脚本（推荐）
+
+使用 `build-release.sh` 脚本一键编译所有平台并打包到 `build/releases/` 目录：
+
+```bash
+# 编译所有平台（推荐）
+./build-release.sh all
+```
+
+**脚本自动完成：**
+- ✅ 清理缓存（Step 3 的所有操作）
+- ✅ 编译所有平台（darwin/amd64, darwin/arm64, windows/amd64）
+- ✅ 自动打包：
+  - macOS: 打包成 `.zip`（包含 .app）
+  - Windows: 复制 `.exe` 文件
+- ✅ 输出文件自动包含版本号（从 `wails.json` 读取）
+
+**输出位置：**
+```
+build/releases/
+├── xterm-file-manager-v2.33-darwin-arm64.zip    (macOS Apple Silicon)
+├── xterm-file-manager-v2.33-darwin-amd64.zip    (macOS Intel)
+└── xterm-file-manager-v2.33-windows-amd64.exe   (Windows)
+```
+
+**注意：**
+- Linux 在 macOS 上无法交叉编译，脚本会跳过（这是正常的）
+- 如需 Linux 版本，需要在 Linux 环境下运行 `wails build -platform linux/amd64 -clean`
+
+### 方法 2: 手动编译（开发测试用）
+
 按顺序编译各平台版本：
 
-### 4.1 编译 macOS Intel (darwin/amd64)
+#### 4.1 编译 macOS Intel (darwin/amd64)
 
 ```bash
 wails build -platform darwin/amd64 -clean
 ```
 
-### 4.2 编译 macOS Apple Silicon (darwin/arm64)
+#### 4.2 编译 macOS Apple Silicon (darwin/arm64)
 
 ```bash
 wails build -platform darwin/arm64 -clean
 ```
 
-### 4.3 编译 Windows (windows/amd64)
+#### 4.3 编译 Windows (windows/amd64)
 
 ```bash
 wails build -platform windows/amd64 -clean
 ```
 
-### 4.4 编译 Linux (linux/amd64)
+#### 4.4 编译 Linux (linux/amd64)
 
 **注意：在 macOS 上无法交叉编译 Linux。** 需要在 Linux 环境下编译。
 
@@ -142,7 +173,7 @@ wails build -platform linux/amd64 -clean
 
 如果没有 Linux 环境，可以跳过此步骤。
 
-### 4.5 验证编译结果
+#### 4.5 验证编译结果
 
 ```bash
 # 检查编译输出
@@ -151,6 +182,17 @@ ls -lh build/bin/
 # 应该看到：
 # xterm-file-manager.app (macOS)
 # xterm-file-manager.exe (Windows)
+```
+
+**手动打包（如果使用方法 2）：**
+
+```bash
+# macOS 打包成 zip
+cd build/bin
+zip -r ../../build/releases/xterm-file-manager-v2.33-darwin-arm64.zip xterm-file-manager.app
+
+# Windows 复制 exe
+cp build/bin/xterm-file-manager.exe build/releases/xterm-file-manager-v2.33-windows-amd64.exe
 ```
 
 ## 🏷️ Step 5: 创建版本 Tag
@@ -238,28 +280,63 @@ git push --tags
 
 ## 📦 Step 7: 创建 GitHub Release (可选)
 
+### 方法 1: 使用 build-release.sh 的输出文件
+
+如果使用了 `build-release.sh all`，发版文件已经在 `build/releases/` 目录中：
+
+```bash
+ls -lh build/releases/
+# xterm-file-manager-v2.33-darwin-arm64.zip    (4.4M)
+# xterm-file-manager-v2.33-darwin-amd64.zip    (4.7M)
+# xterm-file-manager-v2.33-windows-amd64.exe   (13M)
+```
+
+### 方法 2: 手动准备文件
+
+如果手动编译，需要先打包：
+
+```bash
+# 打包 macOS 应用
+cd build/bin
+zip -r ../releases/xterm-file-manager-v2.33-darwin-arm64.zip xterm-file-manager.app
+
+# 复制 Windows exe
+cp xterm-file-manager.exe ../releases/xterm-file-manager-v2.33-windows-amd64.exe
+```
+
+### GitHub Release 步骤
+
 1. 访问 GitHub 仓库的 Releases 页面
 2. 点击 "Draft a new release"
-3. 选择刚创建的 tag (vX.XX)
+3. 选择刚创建的 tag (v2.33)
 4. 填写 Release 标题和描述（从 README.md 复制）
-5. 上传编译好的二进制文件：
-   - `xterm-file-manager-darwin-amd64.app` (打包为 .zip)
-   - `xterm-file-manager-darwin-arm64.app` (打包为 .zip)
-   - `xterm-file-manager-windows-amd64.exe`
+5. 上传编译好的二进制文件（从 `build/releases/` 目录）：
+   - `xterm-file-manager-v2.33-darwin-amd64.zip`
+   - `xterm-file-manager-v2.33-darwin-arm64.zip`
+   - `xterm-file-manager-v2.33-windows-amd64.exe`
 6. 点击 "Publish release"
 
 ## ✅ 发版完成检查清单
 
-- [ ] 代码已提交并推送到 main 分支
-- [ ] README.md 已更新 Changelog
-- [ ] docs/工程总结.md 已添加详细记录
-- [ ] 已清理缓存并重新编译
-- [ ] 已编译 darwin/amd64
-- [ ] 已编译 darwin/arm64
-- [ ] 已编译 windows/amd64
-- [ ] 已创建版本 tag (vX.XX)
-- [ ] 已 push 代码和 tag 到远程
-- [ ] (可选) 已创建 GitHub Release
+- [x] 代码已提交并推送到 main 分支
+- [x] README.md 已更新 Changelog
+- [x] docs/工程总结.md 已添加详细记录
+- [x] wails.json 版本号已更新
+- [x] 已清理缓存并重新编译
+- [x] 已编译 darwin/amd64 ✓
+- [x] 已编译 darwin/arm64 ✓
+- [x] 已编译 windows/amd64 ✓
+- [x] 已使用 build-release.sh 打包到 build/releases/
+- [x] 已创建版本 tag (v2.33)
+- [x] 已 push 代码和 tag 到远程
+- [ ] (可选) 已创建 GitHub Release 并上传文件
+
+**本次发版 (v2.33) 已完成！**
+
+发版文件位置：`build/releases/`
+- `xterm-file-manager-v2.33-darwin-arm64.zip` (4.4M)
+- `xterm-file-manager-v2.33-darwin-amd64.zip` (4.7M)
+- `xterm-file-manager-v2.33-windows-amd64.exe` (13M)
 
 ## 🔧 常见问题
 
