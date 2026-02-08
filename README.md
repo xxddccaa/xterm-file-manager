@@ -37,6 +37,29 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.32 - Internationalization (i18n) Support (2026-02-08)
+
+**New Features:**
+- Full internationalization support with react-i18next
+- Language switcher in Settings tab (English / 简体中文)
+- 158+ UI strings translated across 7 modules (common, terminal, editor, files, sync, tools, settings)
+- Ant Design components auto-sync with selected language
+- User language preference persists across app restarts (saved to `~/Library/Application Support/xterm-file-manager/settings.json`)
+- Settings tab: centralized location for language selection and terminal preferences
+
+**Technical Implementation:**
+- Backend: Added `Locale` field to `TerminalSettings` struct in Go
+- Frontend: Integrated react-i18next with 7 namespace modules
+- Language packs: 14 JSON files (7 modules × 2 languages)
+- Real-time language switching without app restart
+- Parameterized translations with variable interpolation (e.g., `t('connectedToHost', { host })`)
+
+**Files Changed:**
+- Backend: `internal/app/app.go` (added Locale field)
+- Frontend: 10 components refactored (App, ToolsTab, EditorTab, TerminalTab, SessionView, FileManager, LocalFileManager, FilesTab, SyncPanel, SettingsTab)
+- New: `frontend/src/i18n/` directory with initialization config and 14 language pack JSON files
+- New: `frontend/src/components/settings/SettingsTab.tsx` component
+
 ### v2.31 - File Association & Open With (2026-02-08)
 
 **New Features:**

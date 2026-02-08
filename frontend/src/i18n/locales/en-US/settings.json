@@ -1,0 +1,11 @@
+{
+  "language": "Language",
+  "terminalSettings": "Terminal Settings",
+  "enableSelectToCopy": "Enable select to copy",
+  "enableRightClickPaste": "Enable right-click paste",
+  "loadFailed": "Failed to load settings",
+  "saveSuccess": "Settings saved successfully",
+  "saveFailed": "Failed to save settings",
+  "appearance": "Appearance",
+  "general": "General"
+}

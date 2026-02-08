@@ -1,0 +1,11 @@
+{
+  "language": "语言",
+  "terminalSettings": "终端设置",
+  "enableSelectToCopy": "启用选择即复制",
+  "enableRightClickPaste": "启用右键粘贴",
+  "loadFailed": "加载设置失败",
+  "saveSuccess": "设置保存成功",
+  "saveFailed": "保存设置失败",
+  "appearance": "外观",
+  "general": "常规"
+}

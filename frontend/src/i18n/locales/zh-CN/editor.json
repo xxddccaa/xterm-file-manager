@@ -1,0 +1,22 @@
+{
+  "newFile": "新建文件",
+  "openFile": "打开文件",
+  "allOpenFiles": "所有打开的文件",
+  "untitled": "未命名-{{n}}",
+  "noFilesOpen": "没有打开的文件",
+  "createOrDragFiles": "创建新文件或拖放文件到这里",
+  "dropFilesToOpen": "拖放文件到这里以打开",
+  "saveFileAs": "文件另存为",
+  "defaultPath": "默认: {{path}}/Untitled.txt",
+  "pathPlaceholder": "留空使用默认路径，或输入自定义路径",
+  "unsavedChanges": "未保存的更改",
+  "closeWithoutSaving": "{{name}} 有未保存的更改。是否不保存并关闭？",
+  "closeWithoutSavingBtn": "不保存并关闭",
+  "fileAlreadyOpen": "文件已打开",
+  "opened": "已打开: {{name}}",
+  "failedToOpen": "打开文件失败: {{error}}",
+  "fileSaved": "文件已保存",
+  "failedToSave": "保存文件失败: {{error}}",
+  "pleaseEnterPath": "请输入文件路径",
+  "fileSavedAs": "文件已保存: {{name}}"
+}

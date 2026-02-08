@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Button, message, Modal, Input, Dropdown } from 'antd'
 import { PlusOutlined, SaveOutlined, CloseOutlined, FileOutlined, FolderOpenOutlined, EllipsisOutlined } from '@ant-design/icons'
 import Editor from '@monaco-editor/react'
+import { useTranslation } from 'react-i18next'
 import { ReadLocalFile, WriteLocalFile, CreateLocalFile, GetDefaultEditorDirectory, GetNextUntitledFileName, OpenFileDialog } from '../../../wailsjs/go/app/App'
 import './EditorTab.css'
 
@@ -38,6 +39,7 @@ const getFileName = (path: string): string => {
 }
 
 const EditorTab: React.FC = () => {
+  const { t } = useTranslation(['editor', 'common'])
   const [files, setFiles] = useState<EditorFile[]>([])
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -73,7 +75,7 @@ const EditorTab: React.FC = () => {
     const existingFile = currentFiles.find(f => f.path === filePath)
     if (existingFile) {
       setActiveFileId(existingFile.id)
-      message.info('File is already open')
+      message.info(t('editor:fileAlreadyOpen'))
       return
     }
 
@@ -93,9 +95,9 @@ const EditorTab: React.FC = () => {
       setActiveFileId(newFile.id)
       // Scroll tab bar to start to reveal the new first tab
       setTimeout(() => { if (tabBarRef.current) tabBarRef.current.scrollLeft = 0 }, 0)
-      message.success(`Opened: ${newFile.name}`)
+      message.success(t('editor:opened', { name: newFile.name }))
     } catch (err: any) {
-      message.error(`Failed to open file: ${err?.message || err}`)
+      message.error(t('editor:failedToOpen', { error: err?.message || err }))
       console.error('Failed to open file:', filePath, err)
     }
   }, [])
@@ -155,7 +157,7 @@ const EditorTab: React.FC = () => {
     const newFile: EditorFile = {
       id: `new-${Date.now()}`,
       path: '',
-      name: `Untitled-${fileCounterRef.current++}`,
+      name: t('editor:untitled', { n: fileCounterRef.current++ }),
       content: '',
       modified: false,
       language: 'plaintext',
@@ -175,7 +177,7 @@ const EditorTab: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Failed to open file dialog:', err)
-      message.error(`Failed to open file: ${err?.message || err}`)
+      message.error(t('editor:failedToOpen', { error: err?.message || err }))
     }
   }
 
@@ -216,9 +218,9 @@ const EditorTab: React.FC = () => {
           ? { ...f, content: currentContent, modified: false }
           : f
       ))
-      message.success('File saved')
+      message.success(t('editor:fileSaved'))
     } catch (err: any) {
-      message.error(`Failed to save file: ${err?.message || err}`)
+      message.error(t('editor:failedToSave', { error: err?.message || err }))
       console.error('Failed to save file:', err)
     }
   }
@@ -240,7 +242,7 @@ const EditorTab: React.FC = () => {
 
       if (!finalPath) {
         if (!defaultDirectory) {
-          message.error('Please enter a file path')
+          message.error(t('editor:pleaseEnterPath'))
           return
         }
         finalPath = await GetNextUntitledFileName(defaultDirectory)
@@ -263,9 +265,9 @@ const EditorTab: React.FC = () => {
           : f
       ))
       setSaveAsModalVisible(false)
-      message.success(`File saved: ${getFileName(finalPath)}`)
+      message.success(t('editor:fileSavedAs', { name: getFileName(finalPath) }))
     } catch (err: any) {
-      message.error(`Failed to save file: ${err?.message || err}`)
+      message.error(t('editor:failedToSave', { error: err?.message || err }))
       console.error('Failed to save file:', err)
     }
   }
@@ -277,11 +279,11 @@ const EditorTab: React.FC = () => {
 
     if (file.modified) {
       Modal.confirm({
-        title: 'Unsaved Changes',
-        content: `${file.name} has unsaved changes. Close without saving?`,
-        okText: 'Close Without Saving',
+        title: t('editor:unsavedChanges'),
+        content: t('editor:closeWithoutSaving', { name: file.name }),
+        okText: t('editor:closeWithoutSavingBtn'),
         okType: 'danger',
-        cancelText: 'Cancel',
+        cancelText: t('common:cancel'),
         onOk: () => {
           closeFileConfirmed(fileId)
         },
@@ -378,7 +380,7 @@ const EditorTab: React.FC = () => {
         <div className="drop-overlay">
           <div className="drop-message">
             <FileOutlined style={{ fontSize: 48 }} />
-            <p>Drop files here to open</p>
+            <p>{t('editor:dropFilesToOpen')}</p>
           </div>
         </div>
       )}
@@ -390,14 +392,14 @@ const EditorTab: React.FC = () => {
           onClick={handleNewFile}
           size="small"
         >
-          New File
+          {t('editor:newFile')}
         </Button>
         <Button
           icon={<FolderOpenOutlined />}
           onClick={handleOpenFileDialog}
           size="small"
         >
-          Open File
+          {t('editor:openFile')}
         </Button>
         {activeFileId && (
           <Button
@@ -406,7 +408,7 @@ const EditorTab: React.FC = () => {
             size="small"
             disabled={!files.find(f => f.id === activeFileId)?.modified}
           >
-            Save
+            {t('common:save')}
           </Button>
         )}
       </div>
@@ -414,8 +416,8 @@ const EditorTab: React.FC = () => {
       {files.length === 0 ? (
         <div className="editor-empty-state">
           <FileOutlined style={{ fontSize: 64, color: '#888' }} />
-          <p>No files open</p>
-          <p className="editor-empty-hint">Create a new file or drag & drop files here</p>
+          <p>{t('editor:noFilesOpen')}</p>
+          <p className="editor-empty-hint">{t('editor:createOrDragFiles')}</p>
         </div>
       ) : (
         <div className="editor-main">
@@ -460,7 +462,7 @@ const EditorTab: React.FC = () => {
               trigger={['click']}
               placement="bottomRight"
             >
-              <div className="tab-list-btn" title="All open files">
+              <div className="tab-list-btn" title={t('editor:allOpenFiles')}>
                 <EllipsisOutlined />
               </div>
             </Dropdown>
@@ -499,17 +501,17 @@ const EditorTab: React.FC = () => {
       )}
 
       <Modal
-        title="Save File As"
+        title={t('editor:saveFileAs')}
         open={saveAsModalVisible}
         onOk={handleSaveAs}
         onCancel={() => setSaveAsModalVisible(false)}
-        okText="Save"
+        okText={t('common:save')}
       >
         <div style={{ marginBottom: 8, color: '#888', fontSize: 12 }}>
-          Default: {defaultDirectory ? `${defaultDirectory}/Untitled.txt` : 'Loading...'}
+          {defaultDirectory ? t('editor:defaultPath', { path: defaultDirectory }) : t('common:loading')}
         </div>
         <Input
-          placeholder="Leave empty for default, or enter custom path"
+          placeholder={t('editor:pathPlaceholder')}
           value={saveAsPath}
           onChange={(e) => setSaveAsPath(e.target.value)}
           onPressEnter={handleSaveAs}

@@ -6,6 +6,7 @@ import {
   FolderOutlined,
   EllipsisOutlined,
 } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 import FileBrowserPanel from './FileBrowserPanel'
 import {
   GetHomeDirectory,
@@ -21,6 +22,7 @@ interface TabData {
 }
 
 const FilesTab: React.FC = () => {
+  const { t } = useTranslation(['files', 'common'])
   const [tabs, setTabs] = useState<TabData[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const tabBarRef = useRef<HTMLDivElement>(null)
@@ -30,7 +32,7 @@ const FilesTab: React.FC = () => {
 
   // Create a new tab - always creates, even if same path exists
   const createTab = useCallback((path: string) => {
-    const name = path.split('/').pop() || 'Home'
+    const name = path.split('/').pop() || t('files:home')
     const newTab: TabData = {
       id: `tab-${Date.now()}-${Math.random()}`,
       name,
@@ -43,7 +45,7 @@ const FilesTab: React.FC = () => {
         tabBarRef.current.scrollLeft = 0
       }
     }, 0)
-  }, [])
+  }, [t])
 
   const handleNewTab = useCallback(async () => {
     try {
@@ -59,13 +61,13 @@ const FilesTab: React.FC = () => {
     GetHomeDirectory().then(home => {
       const newTab: TabData = {
         id: `tab-${Date.now()}`,
-        name: 'Home',
+        name: t('files:home'),
         path: home,
       }
       setTabs([newTab])
       setActiveTabId(newTab.id)
     })
-  }, [])
+  }, [t])
 
   // Listen for file drops from Finder
   useEffect(() => {
@@ -125,12 +127,12 @@ const FilesTab: React.FC = () => {
       setTabs(prev =>
         prev.map(tab =>
           tab.id === tabId
-            ? { ...tab, path: newPath, name: newPath.split('/').pop() || 'Home' }
+            ? { ...tab, path: newPath, name: newPath.split('/').pop() || t('files:home') }
             : tab
         )
       )
     },
-    []
+    [t]
   )
 
   // Tab dragging for pop-out
@@ -165,15 +167,15 @@ const FilesTab: React.FC = () => {
             try {
               await OpenFileBrowserWindow(tab.path)
               handleCloseTab(tabId)
-              message.success('Opened in new window')
+              message.success(t('files:openedInNewWindow'))
             } catch (err: any) {
-              message.error('Failed to open window: ' + err.message)
+              message.error(t('files:failedToOpenWindow', { error: err.message }))
             }
           }
         }
       }
     },
-    [tabs, dragStartPos, handleCloseTab]
+    [tabs, dragStartPos, handleCloseTab, t]
   )
 
   // Keyboard shortcuts
@@ -245,7 +247,7 @@ const FilesTab: React.FC = () => {
           trigger={['click']}
           placement="bottomRight"
         >
-          <div className="files-tab-list-btn" title="All tabs">
+          <div className="files-tab-list-btn" title={t('files:allTabs')}>
             <EllipsisOutlined />
           </div>
         </Dropdown>
@@ -255,7 +257,7 @@ const FilesTab: React.FC = () => {
           icon={<PlusOutlined />}
           onClick={handleNewTab}
           size="small"
-          title="New Tab (Ctrl+T)"
+          title={t('files:newTabShortcut')}
         />
       </div>
 
@@ -264,8 +266,8 @@ const FilesTab: React.FC = () => {
         {tabs.length === 0 ? (
           <div className="files-empty-state">
             <FolderOutlined style={{ fontSize: 64, color: '#888' }} />
-            <p>No tabs open</p>
-            <p className="files-empty-hint">Click + to open a new tab or drag files from Finder</p>
+            <p>{t('files:noTabsOpen')}</p>
+            <p className="files-empty-hint">{t('files:clickToOpenOrDragFiles')}</p>
           </div>
         ) : (
           tabs.map(tab => (

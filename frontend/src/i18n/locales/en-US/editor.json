@@ -1,0 +1,22 @@
+{
+  "newFile": "New File",
+  "openFile": "Open File",
+  "allOpenFiles": "All open files",
+  "untitled": "Untitled-{{n}}",
+  "noFilesOpen": "No files open",
+  "createOrDragFiles": "Create a new file or drag & drop files here",
+  "dropFilesToOpen": "Drop files here to open",
+  "saveFileAs": "Save File As",
+  "defaultPath": "Default: {{path}}/Untitled.txt",
+  "pathPlaceholder": "Leave empty for default, or enter custom path",
+  "unsavedChanges": "Unsaved Changes",
+  "closeWithoutSaving": "{{name}} has unsaved changes. Close without saving?",
+  "closeWithoutSavingBtn": "Close Without Saving",
+  "fileAlreadyOpen": "File is already open",
+  "opened": "Opened: {{name}}",
+  "failedToOpen": "Failed to open file: {{error}}",
+  "fileSaved": "File saved",
+  "failedToSave": "Failed to save file: {{error}}",
+  "pleaseEnterPath": "Please enter a file path",
+  "fileSavedAs": "File saved: {{name}}"
+}

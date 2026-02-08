@@ -11,6 +11,7 @@ import {
   DeleteOutlined,
   EditOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
 import logger from '../../utils/logger'
@@ -46,6 +47,7 @@ const FileManager: React.FC<FileManagerProps> = ({
   onDownloadFile,
   refreshKey,
 }) => {
+  const { t } = useTranslation(['files', 'common']);
   const [files, setFiles] = useState<FileInfo[]>([]);
   // Use '.' (current directory) instead of '~' to follow terminal's working directory
   // This avoids permission issues when connecting to servers where user can't access /root
@@ -191,7 +193,7 @@ const FileManager: React.FC<FileManagerProps> = ({
       }
     } catch (error: any) {
       console.error('❌ Failed to load files:', error);
-      message.error(`Failed to load files: ${error?.message || error}`);
+      message.error(t('files:failedToLoadFiles', { error: error?.message || error }));
       setFiles([]);
     } finally {
       setLoading(false);
@@ -216,7 +218,7 @@ const FileManager: React.FC<FileManagerProps> = ({
         currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`;
       if ((window as any).go?.app?.App?.OpenEditorWindow) {
         (window as any).go.app.App.OpenEditorWindow(remotePath, true, sessionId)
-          .catch((err: any) => message.error(`Failed to open editor: ${err?.message || err}`));
+          .catch((err: any) => message.error(t('files:failedToOpenEditor', { error: err?.message || err })));
       }
     }
   };
@@ -241,7 +243,7 @@ const FileManager: React.FC<FileManagerProps> = ({
     setContextMenu(prev => ({ ...prev, visible: false }));
     if ((window as any).go?.app?.App?.OpenEditorWindow) {
       (window as any).go.app.App.OpenEditorWindow(remotePath, true, sessionId)
-        .catch((err: any) => message.error(`Failed to open editor: ${err?.message || err}`));
+        .catch((err: any) => message.error(t('files:failedToOpenEditor', { error: err?.message || err })));
     }
   };
 
@@ -264,7 +266,7 @@ const FileManager: React.FC<FileManagerProps> = ({
         onDownloadFile(remotePath, localDir);
       }
     } catch (err: any) {
-      message.error(`Download failed: ${err?.message || err}`);
+      message.error(t('files:deleteFailed', { error: err?.message || err }));
     }
   };
 
@@ -278,28 +280,28 @@ const FileManager: React.FC<FileManagerProps> = ({
 
     // Confirm deletion
     Modal.confirm({
-      title: `Delete ${file.isDir ? 'directory' : 'file'}?`,
-      content: `Are you sure you want to delete "${file.name}"? This action cannot be undone.`,
-      okText: 'Delete',
+      title: t('files:deleteType', { type: file.isDir ? t('files:directory') : t('files:file') }),
+      content: t('files:deleteConfirm', { name: file.name }),
+      okText: t('common:delete'),
       okType: 'danger',
-      cancelText: 'Cancel',
+      cancelText: t('common:cancel'),
       onOk: async () => {
         try {
           if (file.isDir) {
             if ((window as any).go?.app?.App?.DeleteRemoteDirectory) {
               await (window as any).go.app.App.DeleteRemoteDirectory(sessionId, remotePath);
-              message.success(`Deleted directory: ${file.name}`);
+              message.success(t('files:deletedDirectory', { name: file.name }));
               loadFiles(currentPath);
             }
           } else {
             if ((window as any).go?.app?.App?.DeleteRemoteFile) {
               await (window as any).go.app.App.DeleteRemoteFile(sessionId, remotePath);
-              message.success(`Deleted file: ${file.name}`);
+              message.success(t('files:deletedFile', { name: file.name }));
               loadFiles(currentPath);
             }
           }
         } catch (err: any) {
-          message.error(`Delete failed: ${err?.message || err}`);
+          message.error(t('files:deleteFailed', { error: err?.message || err }));
         }
       },
     });
@@ -332,11 +334,11 @@ const FileManager: React.FC<FileManagerProps> = ({
     try {
       if ((window as any).go?.app?.App?.RenameRemoteFile) {
         await (window as any).go.app.App.RenameRemoteFile(sessionId, oldPath, name);
-        message.success(`Renamed to: ${name}`);
+        message.success(t('files:renamedTo', { name }));
         loadFiles(currentPath);
       }
     } catch (err: any) {
-      message.error(`Rename failed: ${err?.message || err}`);
+      message.error(t('files:renameFailed', { error: err?.message || err }));
     } finally {
       setTimeout(() => { renameSubmittedRef.current = false; }, 50);
     }
@@ -467,13 +469,13 @@ const FileManager: React.FC<FileManagerProps> = ({
             onKeyDown={handlePathKeyDown}
             autoFocus
             className="path-input"
-            placeholder="Enter remote path..."
+            placeholder={t('files:enterRemotePath')}
           />
         ) : (
           <div
             className="path-display"
             onClick={handlePathEdit}
-            title="Click to edit path"
+            title={t('files:clickToEditPath')}
           >
             {currentPath}
           </div>
@@ -491,10 +493,10 @@ const FileManager: React.FC<FileManagerProps> = ({
         {loading ? (
           <div className="file-list-empty">
             <Spin size="small" />
-            <span style={{ marginLeft: 8 }}>Loading...</span>
+            <span style={{ marginLeft: 8 }}>{t('common:loading')}</span>
           </div>
         ) : filteredFiles.length === 0 ? (
-          <div className="file-list-empty">Empty directory</div>
+          <div className="file-list-empty">{t('files:emptyDirectory')}</div>
         ) : (
           filteredFiles.map((file, index) => (
             <div
@@ -556,7 +558,7 @@ const FileManager: React.FC<FileManagerProps> = ({
       {dragOver && (
         <div className="drop-overlay">
           <UploadOutlined style={{ fontSize: 36, marginBottom: 12 }} />
-          <div>Drop files here to upload</div>
+          <div>{t('files:dropFilesToUpload')}</div>
         </div>
       )}
 
@@ -571,12 +573,12 @@ const FileManager: React.FC<FileManagerProps> = ({
           {!contextMenu.file.isDir && (
             <div className="context-menu-item" onClick={handleContextMenuEdit}>
               <EditOutlined />
-              <span>Edit</span>
+              <span>{t('common:edit')}</span>
             </div>
           )}
           <div className="context-menu-item" onClick={handleContextMenuDownload}>
             <DownloadOutlined />
-            <span>Download to local</span>
+            <span>{t('files:downloadToLocal')}</span>
           </div>
           {contextMenu.file.isDir && (
             <div
@@ -592,7 +594,7 @@ const FileManager: React.FC<FileManagerProps> = ({
               }}
             >
               <FolderOutlined />
-              <span>Open directory</span>
+              <span>{t('files:openDirectory')}</span>
             </div>
           )}
           <div
@@ -603,19 +605,19 @@ const FileManager: React.FC<FileManagerProps> = ({
             }}
           >
             <ReloadOutlined />
-            <span>Refresh</span>
+            <span>{t('common:refresh')}</span>
           </div>
           <div
             className="context-menu-item"
             onClick={handleContextMenuRename}
           >
             <EditOutlined />
-            <span>Rename</span>
+            <span>{t('common:rename')}</span>
           </div>
           <div className="context-menu-divider" />
           <div className="context-menu-item danger" onClick={handleContextMenuDelete}>
             <DeleteOutlined />
-            <span>Delete</span>
+            <span>{t('common:delete')}</span>
           </div>
         </div>
       )}

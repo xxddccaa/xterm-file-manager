@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Layout, Menu } from 'antd'
 import { FileTextOutlined, CodeOutlined, SwapOutlined } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 import JsonFormatter from './JsonFormatter'
 import CFormatter from './CFormatter'
 import EscapeTool from './EscapeTool'
@@ -18,24 +19,25 @@ interface ToolItem {
 }
 
 const ToolsTab: React.FC = () => {
+  const { t } = useTranslation('tools')
   const [selectedTool, setSelectedTool] = useState<ToolType>('json')
 
   const tools: ToolItem[] = [
     {
       key: 'json',
-      label: 'JSON Formatter',
+      label: t('jsonFormatter'),
       icon: <FileTextOutlined />,
       component: <JsonFormatter />,
     },
     {
       key: 'c',
-      label: 'C Formatter',
+      label: t('cFormatter'),
       icon: <CodeOutlined />,
       component: <CFormatter />,
     },
     {
       key: 'escape',
-      label: 'Escape Tool',
+      label: t('escapeTool'),
       icon: <SwapOutlined />,
       component: <EscapeTool />,
     },

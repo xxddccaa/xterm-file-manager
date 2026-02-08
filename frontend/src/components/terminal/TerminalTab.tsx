@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Layout, Input, Button, List, Spin, message } from 'antd'
 import { SearchOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
 import { ConnectSSH, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal } from '../../../wailsjs/go/app/App'
@@ -25,6 +26,7 @@ interface TerminalSettings {
 }
 
 const TerminalTab: React.FC = () => {
+  const { t } = useTranslation(['terminal', 'common'])
   const [sshConfigs, setSshConfigs] = useState<SSHConfigEntry[]>([])
   const [searchText, setSearchText] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
@@ -73,7 +75,7 @@ const TerminalTab: React.FC = () => {
       setSshConfigs(configs || [])
     } catch (error) {
       console.error('Failed to load SSH config:', error)
-      message.error('Failed to load SSH configuration')
+      message.error(t('terminal:failedToLoadSSHConfig'))
     } finally {
       setLoading(false)
     }
@@ -123,10 +125,10 @@ const TerminalTab: React.FC = () => {
       ))
       setActiveSessionId(sessionId)
       
-      message.success(`Connected to ${config.host}`)
+      message.success(t('terminal:connectedToHost', { host: config.host }))
     } catch (error: any) {
       console.error('Failed to create session:', error)
-      message.error(`Failed to connect to ${config.host}: ${error?.message || error}`)
+      message.error(t('terminal:failedToConnect', { host: config.host, error: error?.message || error }))
       
       // Remove the failed session after a delay
       setTimeout(() => {
@@ -148,7 +150,7 @@ const TerminalTab: React.FC = () => {
       const sessionId = await CreateLocalTerminalSession()
       const newSession: Session = {
         id: sessionId,
-        name: 'Local Terminal',
+        name: t('terminal:localTerminal'),
         connected: true,
         type: 'local',
       }
@@ -156,7 +158,7 @@ const TerminalTab: React.FC = () => {
       setActiveSessionId(sessionId)
     } catch (error) {
       console.error('Failed to create local terminal:', error)
-      message.error('Failed to create local terminal session')
+      message.error(t('terminal:failedToCreateLocalSession'))
     }
   }
 
@@ -185,7 +187,7 @@ const TerminalTab: React.FC = () => {
       }, 500)
     } catch (error) {
       console.error('Failed to create local terminal:', error)
-      message.error('Failed to create local terminal session')
+      message.error(t('terminal:failedToCreateLocalSession'))
     }
   }
 
@@ -261,12 +263,12 @@ const TerminalTab: React.FC = () => {
     if (!activeSessionId) return
     
     try {
-      message.loading({ content: `Downloading ${remotePath}...`, key: 'transfer', duration: 0 })
+      message.loading({ content: t('terminal:downloading', { path: remotePath }), key: 'transfer', duration: 0 })
       const result = await DownloadFile(activeSessionId, remotePath, localDir)
-      message.success({ content: `Downloaded to ${result}`, key: 'transfer' })
+      message.success({ content: t('terminal:downloadedTo', { path: result }), key: 'transfer' })
       setLocalRefreshKey(k => k + 1)
     } catch (err: any) {
-      message.error({ content: `Download failed: ${err?.message || err}`, key: 'transfer' })
+      message.error({ content: t('terminal:downloadFailed', { error: err?.message || err }), key: 'transfer' })
     }
   }
 
@@ -274,12 +276,12 @@ const TerminalTab: React.FC = () => {
     if (!activeSessionId) return
     
     try {
-      message.loading({ content: `Uploading ${localPath}...`, key: 'transfer', duration: 0 })
+      message.loading({ content: t('terminal:uploading', { path: localPath }), key: 'transfer', duration: 0 })
       const result = await UploadFile(activeSessionId, localPath, remoteDir)
-      message.success({ content: `Uploaded to ${result}`, key: 'transfer' })
+      message.success({ content: t('terminal:uploadedTo', { path: result }), key: 'transfer' })
       setRemoteRefreshKey(k => k + 1)
     } catch (err: any) {
-      message.error({ content: `Upload failed: ${err?.message || err}`, key: 'transfer' })
+      message.error({ content: t('terminal:uploadFailed', { error: err?.message || err }), key: 'transfer' })
     }
   }
 
@@ -358,7 +360,7 @@ const TerminalTab: React.FC = () => {
           {!sidebarCollapsed && (
             <>
               <Input
-                placeholder="Search servers..."
+                placeholder={t('terminal:searchServers')}
                 prefix={<SearchOutlined />}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -371,7 +373,7 @@ const TerminalTab: React.FC = () => {
                 block
                 className="local-terminal-btn"
               >
-                Local Terminal
+                {t('terminal:localTerminal')}
               </Button>
             </>
           )}
@@ -418,14 +420,14 @@ const TerminalTab: React.FC = () => {
           <div className="terminal-drop-overlay">
             <div className="terminal-drop-message">
               <span style={{ fontSize: 48 }}>📄</span>
-              <p>Drop files to insert path into terminal</p>
+              <p>{t('terminal:dropFilesToInsertPath')}</p>
             </div>
           </div>
         )}
         {sessions.length === 0 ? (
           <div className="empty-state">
-            <p>No active sessions</p>
-            <p className="empty-hint">Click a server from the sidebar to create a session</p>
+            <p>{t('terminal:noActiveSessions')}</p>
+            <p className="empty-hint">{t('terminal:clickServerToConnect')}</p>
           </div>
         ) : (
           <div className="session-tabs">
@@ -454,8 +456,8 @@ const TerminalTab: React.FC = () => {
         <div className="session-view" ref={containerRef}>
           {sessions.length === 0 ? (
             <div className="empty-state">
-              <p>No active sessions</p>
-              <p className="empty-hint">Click a server from the sidebar to create a session</p>
+              <p>{t('terminal:noActiveSessions')}</p>
+              <p className="empty-hint">{t('terminal:clickServerToConnect')}</p>
             </div>
           ) : (
             sessions.map((session) => {
@@ -479,8 +481,8 @@ const TerminalTab: React.FC = () => {
                     }}
                   >
                     <div className="pane-header">
-                      <span className="pane-title">Terminal</span>
-                      <span className="pane-info">Local Terminal</span>
+                      <span className="pane-title">{t('common:terminal')}</span>
+                      <span className="pane-info">{t('terminal:localTerminal')}</span>
                     </div>
                     <div className="pane-content">
                       <Terminal
@@ -509,8 +511,8 @@ const TerminalTab: React.FC = () => {
                     }}
                   >
                     <div className="pane-header">
-                      <span className="pane-title">Local Files</span>
-                      <span className="pane-info">localhost</span>
+                      <span className="pane-title">{t('terminal:localFiles')}</span>
+                      <span className="pane-info">{t('terminal:localhost')}</span>
                     </div>
                     <div className="pane-content">
                       <LocalFileManager
@@ -541,7 +543,7 @@ const TerminalTab: React.FC = () => {
                   }}
                 >
                   <div className="pane-header">
-                    <span className="pane-title">Terminal</span>
+                    <span className="pane-title">{t('common:terminal')}</span>
                     <span className="pane-info">{session.name}</span>
                   </div>
                   <div className="pane-content">
@@ -571,7 +573,7 @@ const TerminalTab: React.FC = () => {
                   }}
                 >
                   <div className="pane-header">
-                    <span className="pane-title">Remote Files</span>
+                    <span className="pane-title">{t('terminal:remoteFiles')}</span>
                     <span className="pane-info">{session.name}</span>
                   </div>
                   <div className="pane-content">
@@ -591,7 +593,7 @@ const TerminalTab: React.FC = () => {
                         height: '100%',
                         color: '#888'
                       }}>
-                        {session.connected ? 'No SSH config' : 'Connecting...'}
+                        {session.connected ? t('terminal:noSSHConfig') : t('terminal:connecting')}
                       </div>
                     )}
                   </div>
@@ -613,8 +615,8 @@ const TerminalTab: React.FC = () => {
                   }}
                 >
                   <div className="pane-header">
-                    <span className="pane-title">Local Files</span>
-                    <span className="pane-info">localhost</span>
+                    <span className="pane-title">{t('terminal:localFiles')}</span>
+                    <span className="pane-info">{t('terminal:localhost')}</span>
                   </div>
                   <div className="pane-content">
                     {session.connected ? (
@@ -632,7 +634,7 @@ const TerminalTab: React.FC = () => {
                         height: '100%',
                         color: '#888'
                       }}>
-                        Connecting...
+                        {t('terminal:connecting')}
                       </div>
                     )}
                   </div>

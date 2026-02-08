@@ -1,0 +1,19 @@
+.settings-tab {
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+}
+
+.settings-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.settings-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  font-size: 16px;
+  color: #888;
+}

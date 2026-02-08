@@ -10,6 +10,7 @@ import {
   EditOutlined,
 } from '@ant-design/icons';
 import { Input, Button, message, Spin, Modal } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { GetHomeDirectory, ListLocalFiles, OpenEditorWindow, DeleteLocalDirectory, DeleteLocalFile, DownloadFile, RenameLocalFile } from '../../../wailsjs/go/app/App'
 import logger from '../../utils/logger'
 import './LocalFileManager.css';
@@ -42,6 +43,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
   sessionId,
   refreshKey,
 }) => {
+  const { t } = useTranslation(['files', 'common']);
   const [currentPath, setCurrentPath] = useState<string>('');
   const [files, setFiles] = useState<LocalFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,7 +74,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
       })
       .catch((err: any) => {
         console.error('Failed to get home directory:', err);
-        message.error('Failed to get home directory');
+        message.error(t('files:failedToGetHomeDir'));
       });
   }, []);
 
@@ -163,7 +165,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
       }
     } catch (err: any) {
       console.error('Failed to list local files:', err);
-      message.error('Failed to list local files: ' + (err?.message || 'Unknown error'));
+      message.error(t('files:failedToListLocalFiles', { error: err?.message || 'Unknown error' }));
     } finally {
       setLoading(false);
     }
@@ -189,7 +191,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
       // Open file in standalone browser editor window
       if ((window as any).go?.app?.App?.OpenEditorWindow) {
         (window as any).go.app.App.OpenEditorWindow(file.path, false, sessionId || '')
-          .catch((err: any) => message.error(`Failed to open editor: ${err?.message || err}`));
+          .catch((err: any) => message.error(t('files:failedToOpenEditor', { error: err?.message || err })));
       }
     }
   };
@@ -211,7 +213,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
     setContextMenu(prev => ({ ...prev, visible: false }));
     if ((window as any).go?.app?.App?.OpenEditorWindow) {
       (window as any).go.app.App.OpenEditorWindow(contextMenu.file.path, false, sessionId || '')
-        .catch((err: any) => message.error(`Failed to open editor: ${err?.message || err}`));
+        .catch((err: any) => message.error(t('files:failedToOpenEditor', { error: err?.message || err })));
     }
   };
 
@@ -229,28 +231,28 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
 
     // Confirm deletion
     Modal.confirm({
-      title: `Delete ${file.isDir ? 'directory' : 'file'}?`,
-      content: `Are you sure you want to delete "${file.name}"? This action cannot be undone.`,
-      okText: 'Delete',
+      title: t('files:deleteType', { type: file.isDir ? t('files:directory') : t('files:file') }),
+      content: t('files:deleteConfirm', { name: file.name }),
+      okText: t('common:delete'),
       okType: 'danger',
-      cancelText: 'Cancel',
+      cancelText: t('common:cancel'),
       onOk: async () => {
         try {
           if (file.isDir) {
             if ((window as any).go?.app?.App?.DeleteLocalDirectory) {
               await (window as any).go.app.App.DeleteLocalDirectory(file.path);
-              message.success(`Deleted directory: ${file.name}`);
+              message.success(t('files:deletedDirectory', { name: file.name }));
               loadFiles(currentPath);
             }
           } else {
             if ((window as any).go?.app?.App?.DeleteLocalFile) {
               await (window as any).go.app.App.DeleteLocalFile(file.path);
-              message.success(`Deleted file: ${file.name}`);
+              message.success(t('files:deletedFile', { name: file.name }));
               loadFiles(currentPath);
             }
           }
         } catch (err: any) {
-          message.error(`Delete failed: ${err?.message || err}`);
+          message.error(t('files:deleteFailed', { error: err?.message || err }));
         }
       },
     });
@@ -280,11 +282,11 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
     try {
       if ((window as any).go?.app?.App?.RenameLocalFile) {
         await (window as any).go.app.App.RenameLocalFile(file.path, name);
-        message.success(`Renamed to: ${name}`);
+        message.success(t('files:renamedTo', { name }));
         loadFiles(currentPath);
       }
     } catch (err: any) {
-      message.error(`Rename failed: ${err?.message || err}`);
+      message.error(t('files:renameFailed', { error: err?.message || err }));
     } finally {
       setTimeout(() => { renameSubmittedRef.current = false; }, 50);
     }
@@ -412,7 +414,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
           <div
             className="path-display"
             onClick={handlePathEdit}
-            title="Click to edit path"
+            title={t('files:clickToEditPath')}
           >
             {currentPath || 'Local Files'}
           </div>
@@ -430,10 +432,10 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
         {loading ? (
           <div className="file-list-empty">
             <Spin size="small" />
-            <span style={{ marginLeft: 8 }}>Loading...</span>
+            <span style={{ marginLeft: 8 }}>{t('common:loading')}</span>
           </div>
         ) : filteredFiles.length === 0 ? (
-          <div className="file-list-empty">Empty directory</div>
+          <div className="file-list-empty">{t('files:emptyDirectory')}</div>
         ) : (
           filteredFiles.map((file, index) => (
             <div
@@ -495,7 +497,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
       {dragOver && (
         <div className="drop-overlay">
           <DownloadOutlined style={{ fontSize: 36, marginBottom: 12 }} />
-          <div>Drop files here to download</div>
+          <div>{t('files:dropFilesToDownload')}</div>
         </div>
       )}
 
@@ -510,13 +512,13 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
           {!contextMenu.file.isDir && (
             <div className="context-menu-item" onClick={handleContextMenuEdit}>
               <EditOutlined />
-              <span>Edit</span>
+              <span>{t('common:edit')}</span>
             </div>
           )}
           {!contextMenu.file.isDir && onUploadFile && (
             <div className="context-menu-item" onClick={handleContextMenuUpload}>
               <UploadOutlined />
-              <span>Upload to remote</span>
+              <span>{t('files:uploadToRemote')}</span>
             </div>
           )}
           {contextMenu.file.isDir && (
@@ -528,7 +530,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
               }}
             >
               <FolderOutlined />
-              <span>Open directory</span>
+              <span>{t('files:openDirectory')}</span>
             </div>
           )}
           <div
@@ -539,19 +541,19 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
             }}
           >
             <ReloadOutlined />
-            <span>Refresh</span>
+            <span>{t('common:refresh')}</span>
           </div>
           <div
             className="context-menu-item"
             onClick={handleContextMenuRename}
           >
             <EditOutlined />
-            <span>Rename</span>
+            <span>{t('common:rename')}</span>
           </div>
           <div className="context-menu-divider" />
           <div className="context-menu-item danger" onClick={handleContextMenuDelete}>
             <DeleteOutlined />
-            <span>Delete</span>
+            <span>{t('common:delete')}</span>
           </div>
         </div>
       )}

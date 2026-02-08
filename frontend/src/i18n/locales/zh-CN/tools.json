@@ -1,0 +1,5 @@
+{
+  "jsonFormatter": "JSON 格式化",
+  "cFormatter": "C 代码格式化",
+  "escapeTool": "转义工具"
+}

@@ -67,8 +67,9 @@ func (a *App) CreateLocalTerminalSession() (string, error) {
 
 // TerminalSettings represents terminal configuration settings
 type TerminalSettings struct {
-	EnableSelectToCopy    bool `json:"enableSelectToCopy"`
-	EnableRightClickPaste bool `json:"enableRightClickPaste"`
+	EnableSelectToCopy    bool   `json:"enableSelectToCopy"`
+	EnableRightClickPaste bool   `json:"enableRightClickPaste"`
+	Locale                string `json:"locale"` // User language preference (e.g., "en-US", "zh-CN")
 }
 
 // getSettingsPath returns the path to the settings file
@@ -97,6 +98,7 @@ func (a *App) GetTerminalSettings() (string, error) {
 	defaultSettings := TerminalSettings{
 		EnableSelectToCopy:    true,
 		EnableRightClickPaste: true,
+		Locale:                "en-US", // Default to English
 	}
 
 	// Try to read existing settings

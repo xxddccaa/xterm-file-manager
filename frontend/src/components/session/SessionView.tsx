@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Spin, Alert, Button, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import Terminal from '../terminal/Terminal';
 import FileManager from '../file-manager/FileManager';
 import LocalFileManager from '../file-manager/LocalFileManager';
@@ -16,6 +17,7 @@ interface SessionViewProps {
 }
 
 const SessionView: React.FC<SessionViewProps> = ({ sessionId, config, onClose, onConnectionChange }) => {
+  const { t } = useTranslation(['terminal', 'common'])
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +64,7 @@ const SessionView: React.FC<SessionViewProps> = ({ sessionId, config, onClose, o
       }
     } catch (err: any) {
       console.error('❌ Connection failed:', err);
-      setError(err?.message || 'Failed to connect');
+      setError(err?.message || t('terminal:failedToConnect'));
       setConnected(false);
       onConnectionChange?.(false);
     } finally {
@@ -141,27 +143,27 @@ const SessionView: React.FC<SessionViewProps> = ({ sessionId, config, onClose, o
   // --- SFTP transfer handlers ---
   const handleDownloadToLocal = async (remotePath: string, localDir: string) => {
     try {
-      message.loading({ content: `Downloading ${remotePath}...`, key: 'transfer', duration: 0 });
+      message.loading({ content: t('terminal:downloading', { path: remotePath }), key: 'transfer', duration: 0 });
       if ((window as any).go?.app?.App?.DownloadFile) {
         const result = await (window as any).go.app.App.DownloadFile(backendSessionId, remotePath, localDir);
-        message.success({ content: `Downloaded to ${result}`, key: 'transfer' });
+        message.success({ content: t('terminal:downloadedTo', { path: result }), key: 'transfer' });
         setLocalRefreshKey(k => k + 1);
       }
     } catch (err: any) {
-      message.error({ content: `Download failed: ${err?.message || err}`, key: 'transfer' });
+      message.error({ content: t('terminal:downloadFailed', { error: err?.message || err }), key: 'transfer' });
     }
   };
 
   const handleUploadToRemote = async (localPath: string, remoteDir: string) => {
     try {
-      message.loading({ content: `Uploading ${localPath}...`, key: 'transfer', duration: 0 });
+      message.loading({ content: t('terminal:uploading', { path: localPath }), key: 'transfer', duration: 0 });
       if ((window as any).go?.app?.App?.UploadFile) {
         const result = await (window as any).go.app.App.UploadFile(backendSessionId, localPath, remoteDir);
-        message.success({ content: `Uploaded to ${result}`, key: 'transfer' });
+        message.success({ content: t('terminal:uploadedTo', { path: result }), key: 'transfer' });
         setRemoteRefreshKey(k => k + 1);
       }
     } catch (err: any) {
-      message.error({ content: `Upload failed: ${err?.message || err}`, key: 'transfer' });
+      message.error({ content: t('terminal:uploadFailed', { error: err?.message || err }), key: 'transfer' });
     }
   };
 
@@ -169,7 +171,7 @@ const SessionView: React.FC<SessionViewProps> = ({ sessionId, config, onClose, o
     return (
       <div className="session-loading">
         <Spin size="large" />
-        <p>Connecting to {config.host}...</p>
+        <p>{t('terminal:connectingToHost', { host: config.host })}</p>
       </div>
     );
   }
@@ -178,16 +180,16 @@ const SessionView: React.FC<SessionViewProps> = ({ sessionId, config, onClose, o
     return (
       <div className="session-error">
         <Alert
-          message="Connection Failed"
-          description={error || 'Failed to connect to server'}
+          message={t('terminal:connectionFailed')}
+          description={error || t('terminal:failedToConnectToServer')}
           type="error"
           showIcon
         />
         <div className="error-actions">
           <Button icon={<ReloadOutlined />} onClick={connectToServer}>
-            Retry Connection
+            {t('terminal:retryConnection')}
           </Button>
-          <Button onClick={handleDisconnect}>Close Session</Button>
+          <Button onClick={handleDisconnect}>{t('terminal:closeSession')}</Button>
         </div>
       </div>
     );
@@ -206,7 +208,7 @@ const SessionView: React.FC<SessionViewProps> = ({ sessionId, config, onClose, o
           }}
         >
           <div className="pane-header">
-            <span className="pane-title">Terminal</span>
+            <span className="pane-title">{t('common:terminal')}</span>
             <span className="pane-info">{config.user}@{config.host}</span>
           </div>
           <div className="pane-content">
@@ -230,7 +232,7 @@ const SessionView: React.FC<SessionViewProps> = ({ sessionId, config, onClose, o
           }}
         >
           <div className="pane-header">
-            <span className="pane-title">Remote Files</span>
+            <span className="pane-title">{t('terminal:remoteFiles')}</span>
             <span className="pane-info">{config.host}</span>
           </div>
           <div className="pane-content">
@@ -260,8 +262,8 @@ const SessionView: React.FC<SessionViewProps> = ({ sessionId, config, onClose, o
           }}
         >
           <div className="pane-header">
-            <span className="pane-title">Local Files</span>
-            <span className="pane-info">localhost</span>
+            <span className="pane-title">{t('terminal:localFiles')}</span>
+            <span className="pane-info">{t('terminal:localhost')}</span>
           </div>
           <div className="pane-content">
             <LocalFileManager

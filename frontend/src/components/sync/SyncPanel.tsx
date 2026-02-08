@@ -21,6 +21,7 @@ import {
   SetSyncSource,
 } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
+import { useTranslation } from 'react-i18next'
 import './SyncPanel.css'
 
 interface SSHConfigEntry {
@@ -63,6 +64,7 @@ interface SyncStatusEvent {
 }
 
 const SyncPanel: React.FC = () => {
+  const { t } = useTranslation(['sync', 'common'])
   const [sshConfigs, setSshConfigs] = useState<SSHConfigEntry[]>([])
   const [rules, setRules] = useState<SyncRule[]>([])
   const [logs, setLogs] = useState<SyncLogEntry[]>([])
@@ -131,21 +133,21 @@ const SyncPanel: React.FC = () => {
       setRules(syncRules || [])
     } catch (err: any) {
       console.error('Failed to load sync data:', err)
-      message.error('Failed to load sync data')
+      message.error(t('failedToLoadSyncData'))
     }
   }
 
   const handleAddRule = useCallback(async () => {
     if (!draftServer) {
-      message.warning('Please select a server')
+      message.warning(t('pleaseSelectServer'))
       return
     }
     if (!draftRemotePath) {
-      message.warning('Please enter remote path')
+      message.warning(t('pleaseEnterRemotePath'))
       return
     }
     if (!draftLocalPath) {
-      message.warning('Please enter local path')
+      message.warning(t('pleaseEnterLocalPath'))
       return
     }
 
@@ -168,21 +170,21 @@ const SyncPanel: React.FC = () => {
       setDraftRemotePath('')
       setDraftLocalPath('')
       setDraftSource('local')
-      message.success('Sync rule added')
+      message.success(t('syncRuleAdded'))
     } catch (err: any) {
-      message.error(`Failed to add rule: ${err?.message || err}`)
+      message.error(t('failedToAddRule', { error: err?.message || err }))
     }
-  }, [draftServer, draftRemotePath, draftLocalPath, draftSource])
+  }, [draftServer, draftRemotePath, draftLocalPath, draftSource, t])
 
   const handleRemoveRule = useCallback(async (ruleId: string) => {
     try {
       await RemoveSyncRule(ruleId)
       setRules(prev => prev.filter(r => r.id !== ruleId))
-      message.success('Sync rule removed')
+      message.success(t('syncRuleRemoved'))
     } catch (err: any) {
-      message.error(`Failed to remove rule: ${err?.message || err}`)
+      message.error(t('failedToRemoveRule', { error: err?.message || err }))
     }
-  }, [])
+  }, [t])
 
   const handleToggleSync = useCallback(async (rule: SyncRule, checked: boolean) => {
     setLoading(prev => ({ ...prev, [rule.id]: true }))
@@ -199,11 +201,14 @@ const SyncPanel: React.FC = () => {
         )
       }
     } catch (err: any) {
-      message.error(`Failed to ${checked ? 'start' : 'stop'} sync: ${err?.message || err}`)
+      message.error(t('failedToActionSync', { 
+        action: checked ? t('start') : t('stop'), 
+        error: err?.message || err 
+      }))
     } finally {
       setLoading(prev => ({ ...prev, [rule.id]: false }))
     }
-  }, [])
+  }, [t])
 
   const handleChangeSource = useCallback(async (ruleId: string, source: string) => {
     try {
@@ -212,9 +217,9 @@ const SyncPanel: React.FC = () => {
         prev.map(r => (r.id === ruleId ? { ...r, source } : r))
       )
     } catch (err: any) {
-      message.error(`Failed to change source: ${err?.message || err}`)
+      message.error(t('failedToChangeSource', { error: err?.message || err }))
     }
-  }, [])
+  }, [t])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -232,13 +237,13 @@ const SyncPanel: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'synced':
-        return 'Synced'
+        return t('statusSynced')
       case 'syncing':
-        return 'Syncing...'
+        return t('statusSyncing')
       case 'error':
-        return 'Error'
+        return t('statusError')
       default:
-        return 'Idle'
+        return t('statusIdle')
     }
   }
 
@@ -288,22 +293,22 @@ const SyncPanel: React.FC = () => {
       {/* Header */}
       <div className="sync-header">
         <div className="sync-header-left">
-          <span className="sync-title">Directory Sync</span>
+          <span className="sync-title">{t('directorySync')}</span>
           <span className="sync-summary">
-            {activeRules.length === 0 && 'No active sync'}
+            {activeRules.length === 0 && t('noActiveSync')}
             {syncedCount > 0 && (
-              <Badge status="success" text={`${syncedCount} synced`} style={{ marginRight: 12 }} />
+              <Badge status="success" text={t('synced', { n: syncedCount })} style={{ marginRight: 12 }} />
             )}
             {syncingCount > 0 && (
-              <Badge status="processing" text={`${syncingCount} syncing`} style={{ marginRight: 12 }} />
+              <Badge status="processing" text={t('syncing', { n: syncingCount })} style={{ marginRight: 12 }} />
             )}
             {errorCount > 0 && (
-              <Badge status="error" text={`${errorCount} error`} />
+              <Badge status="error" text={t('errorCount', { n: errorCount })} />
             )}
           </span>
         </div>
         <div className="sync-header-right">
-          <Tooltip title="Installation Help">
+          <Tooltip title={t('installationHelp')}>
             <Button
               icon={<QuestionCircleOutlined />}
               size="small"
@@ -329,14 +334,14 @@ const SyncPanel: React.FC = () => {
                 size="small"
                 readOnly
                 className="rule-path-input"
-                prefix={<span className="path-label">Remote</span>}
+                prefix={<span className="path-label">{t('remote')}</span>}
               />
               <Input
                 value={rule.localPath}
                 size="small"
                 readOnly
                 className="rule-path-input"
-                prefix={<span className="path-label">Local</span>}
+                prefix={<span className="path-label">{t('local')}</span>}
               />
             </div>
             <div className="rule-source">
@@ -345,8 +350,8 @@ const SyncPanel: React.FC = () => {
                 size="small"
                 onChange={(val) => handleChangeSource(rule.id, val)}
                 options={[
-                  { value: 'local', label: 'Local\u2192Remote' },
-                  { value: 'remote', label: 'Remote\u2192Local' },
+                  { value: 'local', label: t('localToRemote') },
+                  { value: 'remote', label: t('remoteToLocal') },
                 ]}
                 className="source-select"
                 disabled={rule.active}
@@ -384,7 +389,7 @@ const SyncPanel: React.FC = () => {
           <div className="rule-server">
             <Select
               value={draftServer || undefined}
-              placeholder="Server"
+              placeholder={t('server')}
               size="small"
               onChange={setDraftServer}
               options={sshConfigs.map(c => ({
@@ -400,20 +405,20 @@ const SyncPanel: React.FC = () => {
           </div>
           <div className="rule-paths">
             <Input
-              placeholder="/remote/path"
+              placeholder={t('remotePlaceholder')}
               value={draftRemotePath}
               onChange={(e) => setDraftRemotePath(e.target.value)}
               size="small"
               className="rule-path-input"
-              prefix={<span className="path-label">Remote</span>}
+              prefix={<span className="path-label">{t('remote')}</span>}
             />
             <Input
-              placeholder="/local/path"
+              placeholder={t('localPlaceholder')}
               value={draftLocalPath}
               onChange={(e) => setDraftLocalPath(e.target.value)}
               size="small"
               className="rule-path-input"
-              prefix={<span className="path-label">Local</span>}
+              prefix={<span className="path-label">{t('local')}</span>}
             />
           </div>
           <div className="rule-source">
@@ -422,8 +427,8 @@ const SyncPanel: React.FC = () => {
               size="small"
               onChange={setDraftSource}
               options={[
-                { value: 'local', label: 'Local\u2192Remote' },
-                { value: 'remote', label: 'Remote\u2192Local' },
+                { value: 'local', label: t('localToRemote') },
+                { value: 'remote', label: t('remoteToLocal') },
               ]}
               className="source-select"
             />
@@ -436,7 +441,7 @@ const SyncPanel: React.FC = () => {
               size="small"
               onClick={handleAddRule}
             >
-              Add
+              {t('add')}
             </Button>
           </div>
         </div>
@@ -445,18 +450,18 @@ const SyncPanel: React.FC = () => {
       {/* Log area */}
       <div className="sync-log-section">
         <div className="sync-log-header">
-          <span className="sync-log-title">Sync Log</span>
+          <span className="sync-log-title">{t('syncLog')}</span>
           <Button
             icon={<ClearOutlined />}
             size="small"
             onClick={() => setLogs([])}
           >
-            Clear
+            {t('clear')}
           </Button>
         </div>
         <div className="sync-log-list">
           {logs.length === 0 ? (
-            <div className="sync-log-empty">No sync activity yet</div>
+            <div className="sync-log-empty">{t('noSyncActivity')}</div>
           ) : (
             logs.map((log, i) => (
               <div key={i} className={`sync-log-entry ${getLogClass(log.status)}`}>
@@ -476,70 +481,46 @@ const SyncPanel: React.FC = () => {
 
       {/* Help Modal */}
       <Modal
-        title="Sync Dependencies Installation"
+        title={t('syncDependenciesTitle')}
         open={helpVisible}
         onCancel={() => setHelpVisible(false)}
         footer={[
           <Button key="close" onClick={() => setHelpVisible(false)}>
-            Close
+            {t('common:close')}
           </Button>,
         ]}
         width={600}
       >
         <div className="help-content">
-          <h3>Required Packages on Remote Server</h3>
+          <h3>{t('requiredPackages')}</h3>
           <p>
-            For optimal sync performance, install these packages on your remote server.
-            The sync feature will still work without them (using SFTP fallback and polling),
-            but performance and real-time detection will be degraded.
+            {t('helpIntro')}
           </p>
 
-          <h4>1. rsync (Recommended - for efficient file transfer)</h4>
-          <p>Without rsync, sync uses SFTP which transfers whole files instead of incremental diffs.</p>
+          <h4>{t('rsyncRecommended')}</h4>
+          <p>{t('rsyncDescription')}</p>
           <pre className="help-code">
-{`# Ubuntu / Debian
-sudo apt-get install rsync
-
-# CentOS / RHEL / Fedora
-sudo yum install rsync
-# or
-sudo dnf install rsync
-
-# Alpine
-apk add rsync
-
-# macOS (usually pre-installed)
-brew install rsync`}
+{t('rsyncInstallCommands')}
           </pre>
 
-          <h4>2. inotify-tools (Recommended - for real-time file change detection)</h4>
-          <p>Without inotifywait, the sync uses periodic polling (every 5 seconds) to detect changes.</p>
+          <h4>{t('inotifyRecommended')}</h4>
+          <p>{t('inotifyDescription')}</p>
           <pre className="help-code">
-{`# Ubuntu / Debian
-sudo apt-get install inotify-tools
-
-# CentOS / RHEL / Fedora
-sudo yum install inotify-tools
-# or
-sudo dnf install inotify-tools
-
-# Alpine
-apk add inotify-tools`}
+{t('inotifyInstallCommands')}
           </pre>
 
-          <h4>How it works</h4>
+          <h4>{t('howItWorks')}</h4>
           <ul>
-            <li><strong>With rsync:</strong> Uses rsync over SSH for efficient incremental sync (only changed bytes are transferred)</li>
-            <li><strong>Without rsync:</strong> Falls back to SFTP-based sync (compares file size/mtime, transfers entire changed files)</li>
-            <li><strong>With inotifywait:</strong> Real-time file change detection on remote server</li>
-            <li><strong>Without inotifywait:</strong> Polls remote directory every 5 seconds for changes</li>
-            <li><strong>Local changes:</strong> Always detected in real-time using OS-native file watching (fsnotify)</li>
+            <li><strong>{t('withRsync')}</strong></li>
+            <li><strong>{t('withoutRsync')}</strong></li>
+            <li><strong>{t('withInotify')}</strong></li>
+            <li><strong>{t('withoutInotify')}</strong></li>
+            <li><strong>{t('localChanges')}</strong></li>
           </ul>
 
-          <h4>Sync Direction</h4>
+          <h4>{t('syncDirection')}</h4>
           <p>
-            The <strong>Source</strong> side always wins in case of conflicts. If you set Source = Local,
-            your local directory is the "truth" and remote will be overwritten to match it.
+            {t('syncDirectionDescription')}
           </p>
         </div>
       </Modal>

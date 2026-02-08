@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Tabs, Spin } from 'antd'
 import type { TabsProps } from 'antd'
+import { useTranslation } from 'react-i18next'
 import ErrorBoundary from './components/ErrorBoundary'
 import TerminalTab from './components/terminal/TerminalTab'
 import ToolsTab from './components/tools/ToolsTab'
 import EditorTab from './components/editor/EditorTab'
 import SyncPanel from './components/sync/SyncPanel'
 import FilesTab from './components/files/FilesTab'
+import SettingsTab from './components/settings/SettingsTab'
 import { OnFileDrop, OnFileDropOff, EventsOn } from '../wailsjs/runtime/runtime'
 import './App.css'
 
 const App: React.FC = () => {
+  const { t } = useTranslation('common')
   const [wailsReady, setWailsReady] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('terminal')
   const activeTabRef = useRef(activeTab)
@@ -110,28 +113,33 @@ const App: React.FC = () => {
   const tabItems: TabsProps['items'] = [
     {
       key: 'terminal',
-      label: 'Terminal',
+      label: t('terminal'),
       children: <TerminalTab />,
     },
     {
       key: 'tools',
-      label: 'Tools',
+      label: t('tools'),
       children: <ToolsTab />,
     },
     {
       key: 'editor',
-      label: 'Editor',
+      label: t('editor'),
       children: <EditorTab />,
     },
     {
       key: 'sync',
-      label: 'Sync',
+      label: t('sync'),
       children: <SyncPanel />,
     },
     {
       key: 'files',
-      label: 'Files',
+      label: t('files'),
       children: <FilesTab />,
+    },
+    {
+      key: 'settings',
+      label: t('settings'),
+      children: <SettingsTab />,
     },
   ]
 
