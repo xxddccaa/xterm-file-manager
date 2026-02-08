@@ -2,6 +2,7 @@ opencode.json
 
 # Build outputs
 build/bin/
+build/releases/
 xterm-file-manager
 vite
 *.exe
