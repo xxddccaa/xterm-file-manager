@@ -37,6 +37,32 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.34 - Terminal Enhancements & Configuration Fixes (2026-02-09)
+
+**Bug Fixes:**
+- **Local Terminal Chinese Input**: Fixed broken Chinese character input in local terminals
+  - Added `LANG=en_US.UTF-8` and `LC_ALL=en_US.UTF-8` environment variables
+  - Local terminal now matches SSH terminal behavior for multi-byte character support
+- **Local Terminal Delete Key**: Fixed Delete/Backspace key showing garbled characters (`^?` or `^H`)
+  - Added `TERM=xterm-256color` environment variable (matches SSH terminal configuration)
+  - Terminal control sequences now work correctly
+
+**Configuration Improvements:**
+- **Vite Auto-Open Browser**: Disabled automatic browser tab opening during `wails dev`
+  - Added `open: false` to `frontend/vite.config.ts`
+  - Eliminates unnecessary browser tab at `http://localhost:5173/`
+
+**Documentation:**
+- Updated `AGENTS.md` with critical configuration settings section
+  - Added "Vite Auto-Open Browser" must-disable configuration
+  - Added "Local Terminal Environment Variables" must-set configuration
+  - Prevents AI agents from repeating these common mistakes
+
+**Files Changed:**
+- **Backend**: `internal/app/pty_unix.go` (added TERM and UTF-8 locale environment variables)
+- **Frontend**: `frontend/vite.config.ts` (disabled auto-open browser)
+- **Documentation**: `AGENTS.md` (added Critical Configuration Settings section)
+
 ### v2.33 - Terminal Improvements & Windows Support (2026-02-08)
 
 **Critical Fixes:**

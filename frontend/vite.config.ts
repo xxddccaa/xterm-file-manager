@@ -13,6 +13,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    open: false, // Don't auto-open browser in wails dev mode
   },
   build: {
     outDir: 'dist',

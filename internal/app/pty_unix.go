@@ -65,12 +65,23 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 	// A child shell won't have the 'deactivate' function defined,
 	// so inheriting VIRTUAL_ENV causes errors in shell hooks.
 	cleanEnv := make([]string, 0, len(os.Environ()))
+	termSet := false
 	for _, env := range os.Environ() {
 		if len(env) >= 11 && env[:11] == "VIRTUAL_ENV" {
 			continue // skip VIRTUAL_ENV and VIRTUAL_ENV_PROMPT
 		}
+		if len(env) >= 5 && env[:5] == "TERM=" {
+			termSet = true
+		}
 		cleanEnv = append(cleanEnv, env)
 	}
+	// Set TERM to xterm-256color if not already set (fixes Chinese input and delete key)
+	if !termSet {
+		cleanEnv = append(cleanEnv, "TERM=xterm-256color")
+	}
+	// Set LANG to UTF-8 locale for proper Chinese character support
+	cleanEnv = append(cleanEnv, "LANG=en_US.UTF-8")
+	cleanEnv = append(cleanEnv, "LC_ALL=en_US.UTF-8")
 	cmd.Env = cleanEnv
 
 	// Create PTY using creack/pty (Unix-specific)
