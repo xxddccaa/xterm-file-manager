@@ -363,46 +363,52 @@ ls -l /tmp/ssh_socks5_proxy.py
 ssh -T git@github.com
 ```
 
-**解决方案 A: 创建代理脚本（推荐）**
+**解决方案 A: 使用项目内的代理脚本（推荐）**
 
-如果你有本地代理（如 10828 端口的 SOCKS5 代理），创建 `/tmp/ssh_socks5_proxy.py`：
+本项目已包含代理脚本 `scripts/ssh_socks5_proxy.py`，永久有效（不会像 `/tmp` 目录那样在重启后丢失）。
 
+**配置步骤：**
+
+1. 检查脚本是否存在：
 ```bash
-cat > /tmp/ssh_socks5_proxy.py << 'EOF'
-#!/usr/bin/env python3
-import socket, sys, struct, select, os
-
-def socks5_connect(host, port):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("127.0.0.1", 10828))  # 修改为你的代理端口
-    s.sendall(b"\x05\x01\x00")
-    if s.recv(2)[1:2] != b"\x00": raise Exception("Auth failed")
-    req = b"\x05\x01\x00\x03" + bytes([len(host)]) + host.encode() + struct.pack(">H", port)
-    s.sendall(req)
-    if s.recv(10)[1:2] != b"\x00": raise Exception("Connect failed")
-    return s
-
-sock = socks5_connect(sys.argv[1], int(sys.argv[2]))
-while True:
-    r, _, _ = select.select([sock, sys.stdin], [], [])
-    if sock in r:
-        data = sock.recv(8192)
-        if not data: break
-        os.write(1, data)
-    if sys.stdin in r:
-        data = os.read(0, 8192)
-        if not data: break
-        sock.sendall(data)
-EOF
-
-chmod +x /tmp/ssh_socks5_proxy.py
+ls scripts/ssh_socks5_proxy.py
 ```
 
-然后重试：
+2. 如果需要修改代理端口，编辑脚本：
+```bash
+nano scripts/ssh_socks5_proxy.py
+# 修改: PROXY_PORT = 10828  # 改为你的代理端口
+```
+
+3. 更新 `~/.ssh/config`：
+```bash
+nano ~/.ssh/config
+
+# 修改 GitHub 配置，使用项目里的脚本（替换为你的实际项目路径）:
+Host github.com
+    ProxyCommand python3 /Users/xd/Documents/xiedong_dev/mac_code/xterm-file-manager/scripts/ssh_socks5_proxy.py %h %p
+    User git
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+```
+
+4. 测试连接：
+```bash
+ssh -T git@github.com
+# 应该看到: Hi xxddccaa! You've successfully authenticated...
+```
+
+5. 重试 push：
 ```bash
 git push origin main
 git push origin v2.34
 ```
+
+**为什么这样更好？**
+- ✅ 脚本不会在重启后丢失（`/tmp` 会清空）
+- ✅ 版本控制，团队成员可以共享
+- ✅ 有详细注释和文档（见 `scripts/README.md`）
+- ✅ 方便调试和修改端口配置
 
 **解决方案 B: 使用 HTTPS（需要 token）**
 
