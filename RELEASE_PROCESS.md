@@ -340,7 +340,119 @@ cp xterm-file-manager.exe ../releases/xterm-file-manager-v2.33-windows-amd64.exe
 
 ## 🔧 常见问题
 
-### Q1: 编译后运行出现白屏/黑屏
+### Q1: git push 失败 - SSH 代理问题（重要！）
+
+**症状：**
+```
+/usr/bin/python3: can't open file '/tmp/ssh_socks5_proxy.py': [Errno 2] No such file or directory
+Connection closed by UNKNOWN port 65535
+fatal: Could not read from remote repository.
+```
+
+**原因：** `~/.ssh/config` 配置了 GitHub 使用代理，但代理脚本丢失或损坏
+
+**诊断步骤：**
+```bash
+# 1. 检查 SSH 配置
+cat ~/.ssh/config | grep -A 5 "github.com"
+
+# 2. 检查代理脚本是否存在
+ls -l /tmp/ssh_socks5_proxy.py
+
+# 3. 测试 SSH 连接
+ssh -T git@github.com
+```
+
+**解决方案 A: 创建代理脚本（推荐）**
+
+如果你有本地代理（如 10828 端口的 SOCKS5 代理），创建 `/tmp/ssh_socks5_proxy.py`：
+
+```bash
+cat > /tmp/ssh_socks5_proxy.py << 'EOF'
+#!/usr/bin/env python3
+import socket, sys, struct, select, os
+
+def socks5_connect(host, port):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("127.0.0.1", 10828))  # 修改为你的代理端口
+    s.sendall(b"\x05\x01\x00")
+    if s.recv(2)[1:2] != b"\x00": raise Exception("Auth failed")
+    req = b"\x05\x01\x00\x03" + bytes([len(host)]) + host.encode() + struct.pack(">H", port)
+    s.sendall(req)
+    if s.recv(10)[1:2] != b"\x00": raise Exception("Connect failed")
+    return s
+
+sock = socks5_connect(sys.argv[1], int(sys.argv[2]))
+while True:
+    r, _, _ = select.select([sock, sys.stdin], [], [])
+    if sock in r:
+        data = sock.recv(8192)
+        if not data: break
+        os.write(1, data)
+    if sys.stdin in r:
+        data = os.read(0, 8192)
+        if not data: break
+        sock.sendall(data)
+EOF
+
+chmod +x /tmp/ssh_socks5_proxy.py
+```
+
+然后重试：
+```bash
+git push origin main
+git push origin v2.34
+```
+
+**解决方案 B: 使用 HTTPS（需要 token）**
+
+```bash
+# 1. 切换到 HTTPS
+git remote set-url origin https://github.com/xxddccaa/xterm-file-manager.git
+
+# 2. 如果有代理，配置 git 代理
+git config --global http.proxy socks5://127.0.0.1:10828
+git config --global https.proxy socks5://127.0.0.1:10828
+
+# 3. Push（需要输入 GitHub Personal Access Token）
+git push origin main
+git push origin v2.34
+
+# 4. 清理代理配置（push 成功后）
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+
+# 5. 切回 SSH（可选）
+git remote set-url origin git@github.com:xxddccaa/xterm-file-manager.git
+```
+
+**解决方案 C: 临时禁用代理（不推荐）**
+
+仅当你不需要代理即可访问 GitHub 时使用：
+
+```bash
+# 1. 备份 SSH 配置
+cp ~/.ssh/config ~/.ssh/config.backup
+
+# 2. 注释掉 GitHub 代理
+sed -i.tmp '/github.com/,/UserKnownHostsFile/s/^    ProxyCommand/#    ProxyCommand/' ~/.ssh/config
+
+# 3. Push
+git push origin main
+git push origin v2.34
+
+# 4. 恢复配置
+mv ~/.ssh/config.backup ~/.ssh/config
+```
+
+**AI 使用说明：**
+
+当遇到 SSH 代理错误时：
+1. **优先使用方案 A**：询问用户本地代理端口号（通常是 10828、1080、7890 等），创建代理脚本
+2. **备选方案 B**：如果方案 A 失败，询问用户是否有 GitHub Personal Access Token，使用 HTTPS
+3. **避免方案 C**：不要建议禁用代理，国内用户通常需要代理才能访问 GitHub
+
+### Q2: 编译后运行出现白屏/黑屏
 
 **原因：** 可能是缓存未清理干净
 
@@ -352,7 +464,7 @@ cd frontend && npm install && cd ..
 wails build -platform darwin/arm64 -clean
 ```
 
-### Q2: macOS 提示"应用已损坏"
+### Q3: macOS 提示"应用已损坏"
 
 **原因：** Gatekeeper 安全机制
 
@@ -361,7 +473,7 @@ wails build -platform darwin/arm64 -clean
 xattr -cr /path/to/xterm-file-manager.app
 ```
 
-### Q3: 忘记清理缓存，已经编译完成
+### Q4: 忘记清理缓存，已经编译完成
 
 **解决：**
 ```bash
@@ -372,7 +484,7 @@ wails build -platform darwin/arm64 -clean
 wails build -platform windows/amd64 -clean
 ```
 
-### Q4: 需要回滚版本
+### Q5: 需要回滚版本
 
 **解决：**
 ```bash
