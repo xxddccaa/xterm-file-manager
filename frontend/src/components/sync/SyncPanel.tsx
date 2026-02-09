@@ -10,6 +10,9 @@ import {
   SyncOutlined,
   CloseCircleOutlined,
   MinusCircleOutlined,
+  CopyOutlined,
+  EditOutlined,
+  ApiOutlined,
 } from '@ant-design/icons'
 import {
   GetSSHConfig,
@@ -19,6 +22,8 @@ import {
   StartSync,
   StopSync,
   SetSyncSource,
+  UpdateSyncRule,
+  TestSyncConnection,
 } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { useTranslation } from 'react-i18next'
@@ -78,6 +83,17 @@ const SyncPanel: React.FC = () => {
   const [draftLocalPath, setDraftLocalPath] = useState('')
   const [draftSource, setDraftSource] = useState<string>('local')
 
+  // Edit modal state
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [editingRule, setEditingRule] = useState<SyncRule | null>(null)
+  const [editDraftServer, setEditDraftServer] = useState('')
+  const [editDraftRemotePath, setEditDraftRemotePath] = useState('')
+  const [editDraftLocalPath, setEditDraftLocalPath] = useState('')
+  const [editDraftSource, setEditDraftSource] = useState<string>('local')
+
+  // Test connection state
+  const [testingConnection, setTestingConnection] = useState<{ [key: string]: boolean }>({})
+
   // Load SSH configs and sync rules on mount
   useEffect(() => {
     loadData()
@@ -110,9 +126,16 @@ const SyncPanel: React.FC = () => {
       )
     })
 
+    // Listen for SSH config file changes to reload server list
+    const cleanupSSHConfigChanged = EventsOn('ssh:config-changed', (payload: any) => {
+      console.log('🔐 SSH config file saved, reloading server list...')
+      loadData()
+    })
+
     return () => {
       cleanupLog()
       cleanupStatus()
+      cleanupSSHConfigChanged()
     }
   }, [])
 
@@ -218,6 +241,122 @@ const SyncPanel: React.FC = () => {
       )
     } catch (err: any) {
       message.error(t('failedToChangeSource', { error: err?.message || err }))
+    }
+  }, [t])
+
+  // Copy rule handler
+  const handleCopyRule = useCallback(async (rule: SyncRule) => {
+    try {
+      if (rule.active) {
+        await StopSync(rule.id)
+        setRules(prev =>
+          prev.map(r => (r.id === rule.id ? { ...r, active: false, status: 'idle' } : r))
+        )
+        message.info(t('stoppedSyncBeforeCopy'))
+      }
+
+      const newRule = await AddSyncRule({
+        id: '',
+        serverName: rule.serverName,
+        sshHost: rule.sshHost,
+        remotePath: rule.remotePath,
+        localPath: rule.localPath,
+        source: rule.source,
+        active: false,
+        status: 'idle',
+        lastSync: '',
+        error: '',
+      } as any)
+      setRules(prev => [...prev, newRule])
+      message.success(t('ruleCopied'))
+    } catch (err: any) {
+      message.error(t('failedToCopyRule', { error: err?.message || err }))
+    }
+  }, [t])
+
+  // Edit rule handlers
+  const openEditModal = useCallback(async (rule: SyncRule) => {
+    if (rule.active) {
+      Modal.confirm({
+        title: t('editActiveRuleTitle'),
+        content: t('editActiveRuleWarning'),
+        okText: t('confirm'),
+        cancelText: t('cancel'),
+        onOk: async () => {
+          await StopSync(rule.id)
+          setRules(prev =>
+            prev.map(r => (r.id === rule.id ? { ...r, active: false, status: 'idle' } : r))
+          )
+          message.info(t('stoppedSyncForEdit'))
+          setEditingRule(rule)
+          setEditDraftServer(rule.sshHost)
+          setEditDraftRemotePath(rule.remotePath)
+          setEditDraftLocalPath(rule.localPath)
+          setEditDraftSource(rule.source)
+          setEditModalVisible(true)
+        },
+      })
+    } else {
+      setEditingRule(rule)
+      setEditDraftServer(rule.sshHost)
+      setEditDraftRemotePath(rule.remotePath)
+      setEditDraftLocalPath(rule.localPath)
+      setEditDraftSource(rule.source)
+      setEditModalVisible(true)
+    }
+  }, [t])
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingRule) return
+    if (!editDraftServer) {
+      message.warning(t('pleaseSelectServer'))
+      return
+    }
+    if (!editDraftRemotePath) {
+      message.warning(t('pleaseEnterRemotePath'))
+      return
+    }
+    if (!editDraftLocalPath) {
+      message.warning(t('pleaseEnterLocalPath'))
+      return
+    }
+
+    try {
+      const updatedRule: SyncRule = {
+        ...editingRule,
+        sshHost: editDraftServer,
+        serverName: editDraftServer,
+        remotePath: editDraftRemotePath,
+        localPath: editDraftLocalPath,
+        source: editDraftSource,
+        active: false,
+        status: 'idle',
+        error: '',
+      }
+
+      await UpdateSyncRule(updatedRule as any)
+      setRules(prev => prev.map(r => (r.id === updatedRule.id ? updatedRule : r)))
+      setEditModalVisible(false)
+      setEditingRule(null)
+      message.success(t('ruleUpdated'))
+    } catch (err: any) {
+      message.error(t('failedToUpdateRule', { error: err?.message || err }))
+    }
+  }, [editingRule, editDraftServer, editDraftRemotePath, editDraftLocalPath, editDraftSource, t])
+
+  // Test connection handler
+  const handleTestConnection = useCallback(async (rule: SyncRule) => {
+    setTestingConnection(prev => ({ ...prev, [rule.id]: true }))
+    try {
+      await TestSyncConnection(rule.sshHost)
+      message.success(t('connectionSuccess', { server: rule.sshHost }))
+    } catch (err: any) {
+      Modal.error({
+        title: t('connectionFailed'),
+        content: t('connectionErrorDetail', { server: rule.sshHost, error: err?.message || err }),
+      })
+    } finally {
+      setTestingConnection(prev => ({ ...prev, [rule.id]: false }))
     }
   }, [t])
 
@@ -366,6 +505,31 @@ const SyncPanel: React.FC = () => {
               </Tooltip>
             </div>
             <div className="rule-actions">
+              <Tooltip title={t('testConnection')}>
+                <Button
+                  icon={<ApiOutlined />}
+                  size="small"
+                  onClick={() => handleTestConnection(rule)}
+                  loading={testingConnection[rule.id]}
+                  className="rule-test-btn"
+                />
+              </Tooltip>
+              <Tooltip title={t('copyRule')}>
+                <Button
+                  icon={<CopyOutlined />}
+                  size="small"
+                  onClick={() => handleCopyRule(rule)}
+                  className="rule-copy-btn"
+                />
+              </Tooltip>
+              <Tooltip title={t('editRule')}>
+                <Button
+                  icon={<EditOutlined />}
+                  size="small"
+                  onClick={() => openEditModal(rule)}
+                  className="rule-edit-btn"
+                />
+              </Tooltip>
               <Switch
                 checked={rule.active}
                 onChange={(checked) => handleToggleSync(rule, checked)}
@@ -478,6 +642,70 @@ const SyncPanel: React.FC = () => {
           <div ref={logEndRef} />
         </div>
       </div>
+
+      {/* Edit Rule Modal */}
+      <Modal
+        title={t('editSyncRule')}
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false)
+          setEditingRule(null)
+        }}
+        onOk={handleSaveEdit}
+        okText={t('save')}
+        cancelText={t('cancel')}
+        width={520}
+        destroyOnClose
+      >
+        <div className="edit-sync-modal">
+          <div className="edit-form-item">
+            <label className="edit-form-label">{t('server')}</label>
+            <Select
+              value={editDraftServer || undefined}
+              onChange={setEditDraftServer}
+              options={sshConfigs.map(c => ({
+                value: c.host,
+                label: c.host,
+              }))}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              style={{ width: '100%' }}
+              size="middle"
+            />
+          </div>
+          <div className="edit-form-item">
+            <label className="edit-form-label">{t('remotePath')}</label>
+            <Input
+              value={editDraftRemotePath}
+              onChange={(e) => setEditDraftRemotePath(e.target.value)}
+              placeholder={t('remotePlaceholder')}
+            />
+          </div>
+          <div className="edit-form-item">
+            <label className="edit-form-label">{t('localPath')}</label>
+            <Input
+              value={editDraftLocalPath}
+              onChange={(e) => setEditDraftLocalPath(e.target.value)}
+              placeholder={t('localPlaceholder')}
+            />
+          </div>
+          <div className="edit-form-item">
+            <label className="edit-form-label">{t('syncDirection')}</label>
+            <Select
+              value={editDraftSource}
+              onChange={setEditDraftSource}
+              options={[
+                { value: 'local', label: t('localToRemote') },
+                { value: 'remote', label: t('remoteToLocal') },
+              ]}
+              style={{ width: '100%' }}
+              size="middle"
+            />
+          </div>
+        </div>
+      </Modal>
 
       {/* Help Modal */}
       <Modal

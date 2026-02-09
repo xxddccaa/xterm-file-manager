@@ -37,6 +37,39 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.37 - Drag & Drop Fix & Debug Log Tab (2026-02-09)
+
+**Bug Fixes:**
+- **In-App Drag & Drop to Terminal**: Fixed file drag from file managers to terminal inserting path
+  - Root cause: Wails `DisableWebViewDrop: true` causes WKWebView to intercept ALL drop events at native Objective-C level — JavaScript `drop` events never fire
+  - Solution: Use `dragend` event + shared memory module (`dragState.ts`) instead of `drop` + `dataTransfer`
+  - Use `document.elementFromPoint()` during `dragover` to track cursor position over terminal/file-manager zones
+- **Cross-Pane File Transfer**: Fixed drag-and-drop file transfer between remote and local file managers
+  - Same root cause as above — `drop` never fires, so transfer logic moved to unified `dragend` handler
+  - Remote-to-local (download) and local-to-remote (upload) both work via `dragend` + `setDragTarget()`
+- **Drag-Over Visual State Stuck**: Fixed file manager `drag-over` CSS highlight not clearing after drop
+  - Root cause: `setDragOver(false)` was only called in `drop` handler which never fires
+  - Solution: File managers now listen for `dragend` on `window` to clear visual state
+- **SSH Connection Failure**: Fixed `ConnectSSH` passing host string instead of full `SSHConfigEntry` object
+  - Error: `json: cannot unmarshal string into Go value of type app.SSHConfigEntry`
+  - Fixed in both `handleCreateSession` and `connectSessionIfNeeded` (lazy connect)
+
+**New Features:**
+- **Debug Log Tab**: Built-in Log tab for frontend debugging without browser DevTools
+  - `dlog()` utility logs to in-memory buffer (max 500 entries) + `console.log`
+  - Log tab with Copy All button for easy bug reporting
+  - All drag-and-drop code instrumented with `dlog()` for traceability
+
+**Files Changed:**
+- **New**: `frontend/src/utils/dragState.ts` (shared drag payload + target zone tracking)
+- **New**: `frontend/src/utils/debugLog.ts` (in-memory log collector)
+- **New**: `frontend/src/components/log/LogTab.tsx` (debug log viewer UI)
+- **Modified**: `frontend/src/App.tsx` (added Log tab)
+- **Modified**: `frontend/src/components/terminal/TerminalTab.tsx` (dragend strategy, ConnectSSH fix)
+- **Modified**: `frontend/src/components/file-manager/LocalFileManager.tsx` (dragState + dragend cleanup)
+- **Modified**: `frontend/src/components/file-manager/FileManager.tsx` (dragState + dragend cleanup)
+- **Modified**: `AGENTS.md` (WKWebView drop limitation, ConnectSSH parameter, Debug Log Tab docs)
+
 ### v2.34 - Terminal Enhancements & Configuration Fixes (2026-02-09)
 
 **Bug Fixes:**

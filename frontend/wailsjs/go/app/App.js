@@ -138,6 +138,18 @@ export function ListLocalFiles(arg1) {
   return window['go']['app']['App']['ListLocalFiles'](arg1);
 }
 
+export function LoadEditorTabs() {
+  return window['go']['app']['App']['LoadEditorTabs']();
+}
+
+export function LoadFilesTabs() {
+  return window['go']['app']['App']['LoadFilesTabs']();
+}
+
+export function LoadTerminalSessions() {
+  return window['go']['app']['App']['LoadTerminalSessions']();
+}
+
 export function MoveLocalFile(arg1, arg2) {
   return window['go']['app']['App']['MoveLocalFile'](arg1, arg2);
 }
@@ -186,6 +198,18 @@ export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['app']['App']['ResizeTerminal'](arg1, arg2, arg3);
 }
 
+export function SaveEditorTabs(arg1) {
+  return window['go']['app']['App']['SaveEditorTabs'](arg1);
+}
+
+export function SaveFilesTabs(arg1) {
+  return window['go']['app']['App']['SaveFilesTabs'](arg1);
+}
+
+export function SaveTerminalSessions(arg1) {
+  return window['go']['app']['App']['SaveTerminalSessions'](arg1);
+}
+
 export function SetFileClipboard(arg1, arg2) {
   return window['go']['app']['App']['SetFileClipboard'](arg1, arg2);
 }
@@ -224,6 +248,10 @@ export function Startup(arg1) {
 
 export function StopSync(arg1) {
   return window['go']['app']['App']['StopSync'](arg1);
+}
+
+export function TestSyncConnection(arg1) {
+  return window['go']['app']['App']['TestSyncConnection'](arg1);
 }
 
 export function UpdateSyncRule(arg1) {

@@ -3,17 +3,21 @@ import { Button, message, Modal, Input, Dropdown } from 'antd'
 import { PlusOutlined, SaveOutlined, CloseOutlined, FileOutlined, FolderOpenOutlined, EllipsisOutlined } from '@ant-design/icons'
 import Editor from '@monaco-editor/react'
 import { useTranslation } from 'react-i18next'
-import { ReadLocalFile, WriteLocalFile, CreateLocalFile, GetDefaultEditorDirectory, GetNextUntitledFileName, OpenFileDialog } from '../../../wailsjs/go/app/App'
+import { ReadLocalFile, WriteLocalFile, CreateLocalFile, GetDefaultEditorDirectory, GetNextUntitledFileName, OpenFileDialog, SaveEditorTabs, LoadEditorTabs, ReadRemoteFile } from '../../../wailsjs/go/app/App'
 import './EditorTab.css'
 
 interface EditorFile {
   id: string
   path: string
   name: string
+  customName?: string  // User-defined custom name (if renamed via double-click)
   content: string
   modified: boolean
   language: string
   isNew: boolean
+  isRemote?: boolean  // Remote file via SSH
+  sessionId?: string  // SSH session ID for remote files
+  fileError?: string  // Error message if file couldn't be loaded
 }
 
 // Detect language from file extension
@@ -50,6 +54,14 @@ const EditorTab: React.FC = () => {
   const fileCounterRef = useRef(1)
   const tabBarRef = useRef<HTMLDivElement>(null)
 
+  // Tab drag and drop state for reordering
+  const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null)
+
+  // Tab rename state
+  const [renamingFileId, setRenamingFileId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<any>(null)
+
   // Use a ref to always have access to the latest files state (avoids stale closure)
   const filesRef = useRef<EditorFile[]>([])
   filesRef.current = files
@@ -66,7 +78,16 @@ const EditorTab: React.FC = () => {
       }
     }
     loadDefaultDir()
+    loadSavedTabs()  // Load saved tabs on startup
   }, [])
+
+  // Auto-save tabs when they change (with debounce)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveTabs()
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [files, activeFileId])
 
   // Open file from path (uses ref to avoid stale closure)
   const openFileFromPath = useCallback(async (filePath: string) => {
@@ -152,7 +173,106 @@ const EditorTab: React.FC = () => {
     return () => window.removeEventListener('app:open-file-in-editor', handler)
   }, [openFileFromPath])
 
-  // Create new file
+  // Save tabs to disk
+  const saveTabs = async () => {
+    if (files.length === 0) return
+    try {
+      const data = {
+        files: files.map(f => ({
+          id: f.id,
+          path: f.path,
+          name: f.name,
+          customName: f.customName,
+          language: f.language,
+          isNew: f.isNew,
+          isRemote: f.isRemote,
+          sessionId: f.sessionId,
+          // Don't save content or modified state
+        })),
+        activeFileId
+      }
+      await SaveEditorTabs(JSON.stringify(data))
+      console.log('💾 Saved editor tabs')
+    } catch (error) {
+      console.error('Failed to save editor tabs:', error)
+    }
+  }
+
+  // Load saved tabs and restore files
+  const loadSavedTabs = async () => {
+    try {
+      const dataJSON = await LoadEditorTabs()
+      if (!dataJSON || dataJSON === '{}') return
+
+      const data = JSON.parse(dataJSON)
+      if (!data.files || data.files.length === 0) return
+
+      console.log('📂 Loading saved editor tabs:', data.files.length)
+
+      // Restore files
+      const restoredFiles: EditorFile[] = []
+      for (const savedFile of data.files) {
+        try {
+          let content = ''
+          let fileError: string | undefined
+
+          if (savedFile.isRemote && savedFile.sessionId) {
+            // Try to load remote file
+            try {
+              content = await ReadRemoteFile(savedFile.sessionId, savedFile.path)
+              console.log(`✅ Loaded remote file: ${savedFile.name}`)
+            } catch (err: any) {
+              fileError = `Remote file unavailable: ${err?.message || err}`
+              console.warn(`⚠️ Failed to load remote file ${savedFile.path}:`, err)
+            }
+          } else {
+            // Try to load local file
+            try {
+              content = await ReadLocalFile(savedFile.path)
+              console.log(`✅ Loaded local file: ${savedFile.name}`)
+            } catch (err: any) {
+              fileError = `File not found or inaccessible: ${err?.message || err}`
+              console.warn(`⚠️ Failed to load local file ${savedFile.path}:`, err)
+            }
+          }
+
+          const restoredFile: EditorFile = {
+            id: savedFile.id,
+            path: savedFile.path,
+            name: savedFile.name,
+            customName: savedFile.customName,
+            content,
+            modified: false,
+            language: savedFile.language,
+            isNew: savedFile.isNew,
+            isRemote: savedFile.isRemote,
+            sessionId: savedFile.sessionId,
+            fileError
+          }
+
+          restoredFiles.push(restoredFile)
+        } catch (err) {
+          console.error(`Failed to restore file ${savedFile.path}:`, err)
+        }
+      }
+
+      setFiles(restoredFiles)
+
+      // Restore active file
+      if (data.activeFileId) {
+        setActiveFileId(data.activeFileId)
+      } else if (restoredFiles.length > 0) {
+        setActiveFileId(restoredFiles[0].id)
+      }
+
+      if (restoredFiles.length > 0) {
+        message.success(t('editor:restoredTabs', { count: restoredFiles.length }))
+      }
+    } catch (error) {
+      console.error('Failed to load editor tabs:', error)
+    }
+  }
+
   const handleNewFile = async () => {
     const newFile: EditorFile = {
       id: `new-${Date.now()}`,
@@ -369,6 +489,74 @@ const EditorTab: React.FC = () => {
     // Actual file opening is handled by Wails OnFileDrop
   }, [])
 
+  // Tab drag handlers for reordering
+  const handleTabDragStart = useCallback((e: React.DragEvent, index: number) => {
+    setDraggedTabIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', index.toString())
+    
+    // Set drag image opacity
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.5'
+    }
+  }, [])
+
+  const handleTabDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    
+    if (draggedTabIndex === null || draggedTabIndex === index) return
+    
+    // Reorder files array
+    const newFiles = [...files]
+    const [draggedFile] = newFiles.splice(draggedTabIndex, 1)
+    newFiles.splice(index, 0, draggedFile)
+    setFiles(newFiles)
+    setDraggedTabIndex(index)
+  }, [draggedTabIndex, files])
+
+  const handleTabDragEnd = useCallback((e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1'
+    }
+    setDraggedTabIndex(null)
+  }, [])
+
+  // Tab rename handlers
+  const handleTabDoubleClick = useCallback((file: EditorFile) => {
+    setRenamingFileId(file.id)
+    setRenameValue(file.customName || file.name)
+    // Focus input after state update
+    setTimeout(() => {
+      if (renameInputRef.current) {
+        renameInputRef.current.focus()
+        renameInputRef.current.select()
+      }
+    }, 0)
+  }, [])
+
+  const handleRenameConfirm = useCallback(() => {
+    if (!renamingFileId || !renameValue.trim()) {
+      setRenamingFileId(null)
+      return
+    }
+
+    setFiles(prev => prev.map(f =>
+      f.id === renamingFileId
+        ? { ...f, customName: renameValue.trim() }
+        : f
+    ))
+
+    setRenamingFileId(null)
+    setRenameValue('')
+  }, [renamingFileId, renameValue])
+
+  const handleRenameCancel = useCallback(() => {
+    setRenamingFileId(null)
+    setRenameValue('')
+  }, [])
+
   return (
     <div
       className={`editor-tab-container ${isDragging ? 'dragging' : ''}`}
@@ -424,24 +612,50 @@ const EditorTab: React.FC = () => {
           {/* Tab bar wrapper: scrollable tabs + fixed "..." button */}
           <div className="tab-bar-wrapper">
             <div className="custom-tab-bar" ref={tabBarRef}>
-              {files.map((file) => (
-                <div
-                  key={file.id}
-                  className={`custom-tab ${file.id === activeFileId ? 'active' : ''}`}
-                  onClick={() => setActiveFileId(file.id)}
-                  title={file.path || file.name}
-                >
-                  <FileOutlined className="custom-tab-icon" />
-                  <span className="editor-tab-filename">{file.name}</span>
-                  {file.modified && <span className="editor-modified-dot">●</span>}
-                  <CloseOutlined
-                    className="editor-tab-close"
-                    onClick={(e) => {
+              {files.map((file, index) => (
+              <div
+                key={file.id}
+                className={`custom-tab ${activeFileId === file.id ? 'active' : ''} ${file.fileError ? 'error' : ''}`}
+                draggable={true}
+                onDragStart={(e) => handleTabDragStart(e, index)}
+                onDragOver={(e) => handleTabDragOver(e, index)}
+                onDragEnd={handleTabDragEnd}
+                onClick={() => setActiveFileId(file.id)}
+                onDoubleClick={() => handleTabDoubleClick(file)}
+                title={file.fileError || file.path || file.name}
+              >
+                <span className="file-icon">
+                  <FileOutlined />
+                </span>
+                {renamingFileId === file.id ? (
+                  <Input
+                    ref={renameInputRef}
+                    className="editor-rename-input"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onPressEnter={handleRenameConfirm}
+                    onBlur={handleRenameConfirm}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        handleRenameCancel()
+                      }
                       e.stopPropagation()
-                      handleCloseFile(file.id)
                     }}
+                    onClick={(e) => e.stopPropagation()}
                   />
-                </div>
+                ) : (
+                  <span className="file-name">{file.customName || file.name}</span>
+                )}
+                {file.modified && <span className="modified-indicator">●</span>}
+                {file.fileError && <span className="error-indicator">⚠</span>}
+                <CloseOutlined
+                  className="close-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleCloseFile(file.id)
+                  }}
+                />
+              </div>
               ))}
             </div>
             <Dropdown
@@ -451,7 +665,7 @@ const EditorTab: React.FC = () => {
                   label: (
                     <span>
                       <FileOutlined style={{ marginRight: 6, fontSize: 12 }} />
-                      {file.name}
+                      {file.customName || file.name}
                       {file.modified && <span style={{ color: '#52c41a', marginLeft: 4 }}>●</span>}
                     </span>
                   ),
@@ -475,25 +689,34 @@ const EditorTab: React.FC = () => {
                 key={file.id}
                 className={`editor-pane ${file.id === activeFileId ? 'editor-pane-active' : ''}`}
               >
-                <Editor
-                  height="100%"
-                  language={file.language}
-                  value={file.content}
-                  onChange={(value) => handleEditorChange(value, file.id)}
-                  onMount={(editor) => handleEditorMount(editor, file.id)}
-                  theme="vs-dark"
-                  options={{
-                    minimap: { enabled: true },
-                    fontSize: 14,
-                    lineNumbers: 'on',
-                    rulers: [80, 120],
-                    wordWrap: 'off',
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
-                    tabSize: 2,
-                    insertSpaces: true,
-                  }}
-                />
+                {file.fileError ? (
+                  <div className="editor-error-state">
+                    <span className="error-icon">⚠️</span>
+                    <h3>{t('editor:fileLoadError')}</h3>
+                    <p>{file.fileError}</p>
+                    <p className="error-hint">{t('editor:fileLoadErrorHint')}</p>
+                  </div>
+                ) : (
+                  <Editor
+                    height="100%"
+                    language={file.language}
+                    value={file.content}
+                    onChange={(value) => handleEditorChange(value, file.id)}
+                    onMount={(editor) => handleEditorMount(editor, file.id)}
+                    theme="vs-dark"
+                    options={{
+                      minimap: { enabled: true },
+                      fontSize: 14,
+                      lineNumbers: 'on',
+                      rulers: [80, 120],
+                      wordWrap: 'off',
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                      tabSize: 2,
+                      insertSpaces: true,
+                    }}
+                  />
+                )}
               </div>
             ))}
           </div>

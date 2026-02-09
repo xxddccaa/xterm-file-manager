@@ -12,12 +12,15 @@ import {
   GetHomeDirectory,
   OpenFileBrowserWindow,
   ListLocalFiles,
+  SaveFilesTabs,
+  LoadFilesTabs,
 } from '../../../wailsjs/go/app/App'
 import './FilesTab.css'
 
 interface TabData {
   id: string
   name: string
+  customName?: string  // User-defined custom name (if renamed via double-click)
   path: string
 }
 
@@ -27,8 +30,11 @@ const FilesTab: React.FC = () => {
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const tabBarRef = useRef<HTMLDivElement>(null)
   const dragTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [isDraggingTab, setIsDraggingTab] = useState<string | null>(null)
-  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null)
+
+  // Tab rename state
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<any>(null)
 
   // Create a new tab - always creates, even if same path exists
   const createTab = useCallback((path: string) => {
@@ -56,8 +62,81 @@ const FilesTab: React.FC = () => {
     }
   }, [createTab])
 
-  // Initialize with home directory
+  // Initialize with saved tabs or home directory
   useEffect(() => {
+    loadSavedTabs()
+  }, [])
+
+  // Auto-save tabs when they change (with debounce)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveTabs()
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [tabs, activeTabId])
+
+  // Save tabs to disk
+  const saveTabs = async () => {
+    if (tabs.length === 0) {
+      try {
+        await SaveFilesTabs(JSON.stringify({ tabs: [], activeTabId: null }))
+        console.log('💾 Cleared persisted files tabs (no open tabs)')
+      } catch (error) {
+        console.error('Failed to clear files tabs:', error)
+      }
+      return
+    }
+
+    try {
+      const data = {
+        tabs: tabs.map(t => ({
+          id: t.id,
+          name: t.name,
+          customName: t.customName,
+          path: t.path,
+        })),
+        activeTabId
+      }
+      await SaveFilesTabs(JSON.stringify(data))
+      console.log('💾 Saved files tabs:', tabs.length)
+    } catch (error) {
+      console.error('Failed to save files tabs:', error)
+    }
+  }
+
+  // Load saved tabs from disk
+  const loadSavedTabs = async () => {
+    try {
+      const dataJSON = await LoadFilesTabs()
+      if (!dataJSON || dataJSON === '{}') {
+        // No saved tabs, initialize with home directory
+        initializeDefaultTab()
+        return
+      }
+
+      const data = JSON.parse(dataJSON)
+      if (!data.tabs || data.tabs.length === 0) {
+        initializeDefaultTab()
+        return
+      }
+
+      console.log('📂 Loading saved files tabs:', data.tabs.length)
+      setTabs(data.tabs)
+      
+      if (data.activeTabId && data.tabs.find((t: TabData) => t.id === data.activeTabId)) {
+        setActiveTabId(data.activeTabId)
+      } else if (data.tabs.length > 0) {
+        setActiveTabId(data.tabs[0].id)
+      }
+
+      message.success(t('files:restoredTabs', { count: data.tabs.length }))
+    } catch (error) {
+      console.error('Failed to load files tabs:', error)
+      initializeDefaultTab()
+    }
+  }
+
+  const initializeDefaultTab = () => {
     GetHomeDirectory().then(home => {
       const newTab: TabData = {
         id: `tab-${Date.now()}`,
@@ -66,8 +145,17 @@ const FilesTab: React.FC = () => {
       }
       setTabs([newTab])
       setActiveTabId(newTab.id)
+    }).catch(() => {
+      // Fallback to root if home directory fails
+      const newTab: TabData = {
+        id: `tab-${Date.now()}`,
+        name: '/',
+        path: '/',
+      }
+      setTabs([newTab])
+      setActiveTabId(newTab.id)
     })
-  }, [t])
+  }
 
   // Listen for file drops from Finder
   useEffect(() => {
@@ -135,48 +223,75 @@ const FilesTab: React.FC = () => {
     [t]
   )
 
-  // Tab dragging for pop-out
-  const handleTabDragStart = useCallback(
-    (e: React.DragEvent, tabId: string) => {
-      setIsDraggingTab(tabId)
-      setDragStartPos({ x: e.clientX, y: e.clientY })
-      e.dataTransfer.effectAllowed = 'move'
-      // Store tab data for drag
-      const tab = tabs.find(t => t.id === tabId)
-      if (tab) {
-        e.dataTransfer.setData('text/plain', tab.path)
+  // Tab drag handlers for reordering
+  const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null)
+
+  const handleTabDragStart = useCallback((e: React.DragEvent, index: number) => {
+    setDraggedTabIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', index.toString())
+    
+    // Set drag image opacity
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.5'
+    }
+  }, [])
+
+  const handleTabDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    
+    if (draggedTabIndex === null || draggedTabIndex === index) return
+    
+    // Reorder tabs array
+    const newTabs = [...tabs]
+    const [draggedTab] = newTabs.splice(draggedTabIndex, 1)
+    newTabs.splice(index, 0, draggedTab)
+    setTabs(newTabs)
+    setDraggedTabIndex(index)
+  }, [draggedTabIndex, tabs])
+
+  const handleTabDragEnd = useCallback((e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1'
+    }
+    setDraggedTabIndex(null)
+  }, [])
+
+  // Tab rename handlers
+  const handleTabDoubleClick = useCallback((tab: TabData) => {
+    setRenamingTabId(tab.id)
+    setRenameValue(tab.customName || tab.name)
+    // Focus input after state update
+    setTimeout(() => {
+      if (renameInputRef.current) {
+        renameInputRef.current.focus()
+        renameInputRef.current.select()
       }
-    },
-    [tabs]
-  )
+    }, 0)
+  }, [])
 
-  const handleTabDragEnd = useCallback(
-    async (e: React.DragEvent, tabId: string) => {
-      setIsDraggingTab(null)
-      setDragStartPos(null)
+  const handleRenameConfirm = useCallback(() => {
+    if (!renamingTabId || !renameValue.trim()) {
+      setRenamingTabId(null)
+      return
+    }
 
-      // Check if dragged out of window
-      if (dragStartPos) {
-        const dx = Math.abs(e.clientX - dragStartPos.x)
-        const dy = Math.abs(e.clientY - dragStartPos.y)
+    setTabs(prev => prev.map(t =>
+      t.id === renamingTabId
+        ? { ...t, customName: renameValue.trim() }
+        : t
+    ))
 
-        // If dragged significantly (more than 100px), open in new window
-        if (dx > 100 || dy > 100) {
-          const tab = tabs.find(t => t.id === tabId)
-          if (tab) {
-            try {
-              await OpenFileBrowserWindow(tab.path)
-              handleCloseTab(tabId)
-              message.success(t('files:openedInNewWindow'))
-            } catch (err: any) {
-              message.error(t('files:failedToOpenWindow', { error: err.message }))
-            }
-          }
-        }
-      }
-    },
-    [tabs, dragStartPos, handleCloseTab, t]
-  )
+    setRenamingTabId(null)
+    setRenameValue('')
+  }, [renamingTabId, renameValue])
+
+  const handleRenameCancel = useCallback(() => {
+    setRenamingTabId(null)
+    setRenameValue('')
+  }, [])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -208,17 +323,37 @@ const FilesTab: React.FC = () => {
       {/* Tab Bar */}
       <div className="files-tab-bar-wrapper">
         <div className="files-tab-bar" ref={tabBarRef}>
-          {tabs.map(tab => (
+          {tabs.map((tab, index) => (
             <div
               key={tab.id}
               className={`files-tab ${tab.id === activeTabId ? 'active' : ''}`}
               onClick={() => setActiveTabId(tab.id)}
-              draggable
-              onDragStart={e => handleTabDragStart(e, tab.id)}
-              onDragEnd={e => handleTabDragEnd(e, tab.id)}
+              onDoubleClick={() => handleTabDoubleClick(tab)}
+              draggable={true}
+              onDragStart={e => handleTabDragStart(e, index)}
+              onDragOver={e => handleTabDragOver(e, index)}
+              onDragEnd={handleTabDragEnd}
             >
               <FolderOutlined className="files-tab-icon" />
-              <span className="files-tab-name">{tab.name}</span>
+              {renamingTabId === tab.id ? (
+                <Input
+                  ref={renameInputRef}
+                  className="files-rename-input"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onPressEnter={handleRenameConfirm}
+                  onBlur={handleRenameConfirm}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      handleRenameCancel()
+                    }
+                    e.stopPropagation()
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="files-tab-name">{tab.customName || tab.name}</span>
+              )}
               <CloseOutlined
                 className="files-tab-close"
                 onClick={e => {
@@ -237,7 +372,7 @@ const FilesTab: React.FC = () => {
               label: (
                 <span>
                   <FolderOutlined style={{ marginRight: 6, fontSize: 12 }} />
-                  {tab.name}
+                  {tab.customName || tab.name}
                 </span>
               ),
             })),

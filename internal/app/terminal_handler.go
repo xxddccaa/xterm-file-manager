@@ -34,6 +34,11 @@ type TerminalSession struct {
 	stopOnce    sync.Once // Prevent double-close of stopChan
 	isConnected bool
 	isLocal     bool // true for local terminal, false for SSH
+
+	// UTF-8 safe buffers to prevent character truncation at byte boundaries
+	utf8Buffer   *UTF8SafeBuffer // For local terminal output
+	stdoutBuffer *UTF8SafeBuffer // For SSH stdout
+	stderrBuffer *UTF8SafeBuffer // For SSH stderr
 }
 
 var (
@@ -99,13 +104,15 @@ func (a *App) StartTerminalSession(sessionID string, rows int, cols int) error {
 		return fmt.Errorf("failed to start shell: %v", err)
 	}
 
-	// Create terminal session
+	// Create terminal session with UTF-8 safe buffers
 	termSession := &TerminalSession{
-		SessionID:   sessionID,
-		SSHSession:  sshSession,
-		StdinPipe:   stdin,
-		stopChan:    make(chan struct{}),
-		isConnected: true,
+		SessionID:    sessionID,
+		SSHSession:   sshSession,
+		StdinPipe:    stdin,
+		stopChan:     make(chan struct{}),
+		isConnected:  true,
+		stdoutBuffer: &UTF8SafeBuffer{}, // Prevent UTF-8 truncation in stdout
+		stderrBuffer: &UTF8SafeBuffer{}, // Prevent UTF-8 truncation in stderr
 	}
 
 	// Store session
@@ -121,6 +128,11 @@ func (a *App) StartTerminalSession(sessionID string, rows int, cols int) error {
 				ts.isConnected = false
 			}
 			termSessionMu.Unlock()
+
+			// Flush any remaining bytes when session ends
+			if remaining := termSession.stdoutBuffer.Flush(); remaining != "" {
+				a.emitTerminalOutput(sessionID, remaining)
+			}
 		}()
 
 		buffer := make([]byte, IOBufferSize)
@@ -137,15 +149,24 @@ func (a *App) StartTerminalSession(sessionID string, rows int, cols int) error {
 					return
 				}
 				if n > 0 {
-					// Emit event to frontend via Wails runtime
-					data := string(buffer[:n])
-					a.emitTerminalOutput(sessionID, data)
+					// Use UTF-8 safe buffer to prevent character truncation
+					completeUTF8 := termSession.stdoutBuffer.AppendAndFlush(buffer[:n])
+					if completeUTF8 != "" {
+						a.emitTerminalOutput(sessionID, completeUTF8)
+					}
 				}
 			}
 		}
 	}()
 
 	go func() {
+		defer func() {
+			// Flush any remaining bytes when session ends
+			if remaining := termSession.stderrBuffer.Flush(); remaining != "" {
+				a.emitTerminalOutput(sessionID, remaining)
+			}
+		}()
+
 		buffer := make([]byte, IOBufferSize)
 		for {
 			select {
@@ -160,8 +181,11 @@ func (a *App) StartTerminalSession(sessionID string, rows int, cols int) error {
 					return
 				}
 				if n > 0 {
-					data := string(buffer[:n])
-					a.emitTerminalOutput(sessionID, data)
+					// Use UTF-8 safe buffer to prevent character truncation
+					completeUTF8 := termSession.stderrBuffer.AppendAndFlush(buffer[:n])
+					if completeUTF8 != "" {
+						a.emitTerminalOutput(sessionID, completeUTF8)
+					}
 				}
 			}
 		}
@@ -239,13 +263,17 @@ func (a *App) ResizeTerminal(sessionID string, rows int, cols int) error {
 
 	if termSession.isLocal {
 		// Local terminal: resize PTY (platform-specific)
+		log.Printf("🖥️ [ResizeTerminal] Resizing LOCAL terminal %s to %dx%d (rows x cols)", sessionID, rows, cols)
 		return resizeLocalTerminal(termSession, rows, cols)
 	} else {
 		// SSH terminal: request window change
+		log.Printf("🌐 [ResizeTerminal] Resizing SSH terminal %s to %dx%d (rows x cols)", sessionID, rows, cols)
 		err := termSession.SSHSession.WindowChange(rows, cols)
 		if err != nil {
+			log.Printf("❌ [ResizeTerminal] SSH WindowChange failed: %v", err)
 			return fmt.Errorf("failed to resize terminal: %v", err)
 		}
+		log.Printf("✅ [ResizeTerminal] SSH terminal resized successfully")
 	}
 
 	return nil

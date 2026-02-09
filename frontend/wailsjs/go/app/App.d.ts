@@ -71,6 +71,12 @@ export function ListFiles(arg1:string,arg2:string):Promise<Array<app.FileInfo>>;
 
 export function ListLocalFiles(arg1:string):Promise<Array<app.LocalFileInfo>>;
 
+export function LoadEditorTabs():Promise<string>;
+
+export function LoadFilesTabs():Promise<string>;
+
+export function LoadTerminalSessions():Promise<string>;
+
 export function MoveLocalFile(arg1:string,arg2:string):Promise<void>;
 
 export function OpenEditorWindow(arg1:string,arg2:boolean,arg3:string):Promise<void>;
@@ -95,6 +101,12 @@ export function RenameRemoteFile(arg1:string,arg2:string,arg3:string):Promise<vo
 
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
 
+export function SaveEditorTabs(arg1:string):Promise<void>;
+
+export function SaveFilesTabs(arg1:string):Promise<void>;
+
+export function SaveTerminalSessions(arg1:string):Promise<void>;
+
 export function SetFileClipboard(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function SetSyncSource(arg1:string,arg2:string):Promise<void>;
@@ -114,6 +126,8 @@ export function StartTerminalSession(arg1:string,arg2:number,arg3:number):Promis
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function StopSync(arg1:string):Promise<void>;
+
+export function TestSyncConnection(arg1:string):Promise<void>;
 
 export function UpdateSyncRule(arg1:app.SyncRule):Promise<void>;
 

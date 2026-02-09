@@ -1,6 +1,9 @@
 {
   "searchServers": "Search servers...",
   "localTerminal": "Local Terminal",
+  "editSSHConfig": "Edit Config",
+  "openedSSHConfig": "Opened SSH configuration file",
+  "failedToOpenSSHConfig": "Failed to open SSH configuration file",
   "remoteFiles": "Remote Files",
   "localFiles": "Local Files",
   "localhost": "localhost",
@@ -23,5 +26,7 @@
   "connectionFailed": "Connection Failed",
   "failedToConnectToServer": "Failed to connect to server",
   "retryConnection": "Retry Connection",
-  "closeSession": "Close Session"
+  "closeSession": "Close Session",
+  "noActiveSession": "No active terminal session",
+  "failedToWritePaths": "Failed to write file paths to terminal"
 }

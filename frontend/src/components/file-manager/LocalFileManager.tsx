@@ -13,6 +13,9 @@ import { Input, Button, message, Spin, Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { GetHomeDirectory, ListLocalFiles, OpenEditorWindow, DeleteLocalDirectory, DeleteLocalFile, DownloadFile, RenameLocalFile } from '../../../wailsjs/go/app/App'
 import logger from '../../utils/logger'
+import { setDragPayload, getDragPayload, clearDragPayload } from '../../utils/dragState'
+import { setDragTarget } from '../../utils/dragState'
+import { dlog } from '../../utils/debugLog'
 import './LocalFileManager.css';
 
 interface LocalFile {
@@ -50,7 +53,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
   const [editingPath, setEditingPath] = useState(false);
   const [pathInput, setPathInput] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  const [showHidden, setShowHidden] = useState(false);
+  const [showHidden, setShowHidden] = useState(true);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
@@ -341,6 +344,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragOver(true);
+    setDragTarget('local-fm');
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -349,15 +353,28 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
     setDragOver(false);
   };
 
+  // 'drop' never fires in Wails WKWebView, so we cannot rely on it to clear
+  // the drag-over visual state.  Listen to 'dragend' on window instead.
+  useEffect(() => {
+    const onDragEnd = () => setDragOver(false);
+    window.addEventListener('dragend', onDragEnd);
+    return () => window.removeEventListener('dragend', onDragEnd);
+  }, []);
+
   const handleDropFiles = async (e: React.DragEvent) => {
+    console.log('🟡 [LocalFileManager] handleDropFiles fired, target:', (e.target as HTMLElement)?.className)
+    dlog('[LocalFM] handleDropFiles fired')
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
 
-    const remoteFilePath = e.dataTransfer.getData('remoteFile');
+    // Read from shared drag state (WKWebView-safe) with dataTransfer fallback
+    const payload = getDragPayload();
+    clearDragPayload();
+    const remoteFilePath = (payload?.source === 'remote' ? payload.path : '') 
+      || e.dataTransfer.getData('remoteFile');
     if (remoteFilePath && sessionId) {
       console.log('📥 Download remote file to local:', remoteFilePath, '->', currentPath);
-      // Call backend SFTP download
       try {
         if ((window as any).go?.app?.App?.DownloadFile) {
           message.loading({ content: `Downloading ${remoteFilePath}...`, key: 'download', duration: 0 });
@@ -377,8 +394,20 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
   };
 
   const handleFileDragStart = (e: React.DragEvent, file: LocalFile) => {
-    e.dataTransfer.setData('localFile', file.path);
-    e.dataTransfer.effectAllowed = 'copy';
+    // Store path in shared memory -- WKWebView often clears dataTransfer on drop.
+    setDragPayload({ source: 'local', path: file.path })
+    e.dataTransfer.setData('text/plain', file.path)
+    e.dataTransfer.effectAllowed = 'copy'
+    console.log('🟢 [LocalFileManager] dragStart, path:', file.path)
+    dlog('[LocalFM] dragStart path=' + file.path)
+  };
+
+  const handleFileDragEnd = () => {
+    console.log('🔴 [LocalFileManager] dragEnd fired')
+    dlog('[LocalFM] dragEnd fired')
+    // NOTE: Do NOT clearDragPayload() here. The terminal's window-level
+    // dragend handler (capture phase) fires first and needs the payload.
+    // It clears the payload itself after processing.
   };
 
   const filteredFiles = showHidden
@@ -388,6 +417,7 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
   return (
     <div
       className={`local-file-manager ${dragOver ? 'drag-over' : ''}`}
+      data-current-path={currentPath}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDropFiles}
@@ -446,8 +476,9 @@ const LocalFileManager: React.FC<LocalFileManagerProps> = ({
               onClick={() => handleFileClick(file)}
               onDoubleClick={() => handleFileDoubleClick(file)}
               onContextMenu={e => handleContextMenu(e, file)}
-              draggable={!file.isDir}
+              draggable={true}
               onDragStart={e => handleFileDragStart(e, file)}
+              onDragEnd={handleFileDragEnd}
             >
               <span className="file-icon-wrapper">
                 {file.isDir ? (

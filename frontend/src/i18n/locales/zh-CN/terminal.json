@@ -1,6 +1,9 @@
 {
   "searchServers": "搜索服务器...",
   "localTerminal": "本地终端",
+  "editSSHConfig": "编辑配置",
+  "openedSSHConfig": "已打开 SSH 配置文件",
+  "failedToOpenSSHConfig": "无法打开 SSH 配置文件",
   "remoteFiles": "远程文件",
   "localFiles": "本地文件",
   "localhost": "本地主机",
@@ -23,5 +26,7 @@
   "connectionFailed": "连接失败",
   "failedToConnectToServer": "连接服务器失败",
   "retryConnection": "重试连接",
-  "closeSession": "关闭会话"
+  "closeSession": "关闭会话",
+  "noActiveSession": "没有活动的终端会话",
+  "failedToWritePaths": "无法将文件路径写入终端"
 }

@@ -89,6 +89,7 @@
   min-width: 0;
   scrollbar-width: thin;
   scrollbar-color: #555 #252526;
+  user-select: none; /* Prevent text selection during drag */
 }
 
 .custom-tab-bar::-webkit-scrollbar {
@@ -107,23 +108,41 @@
 .custom-tab {
   display: flex;
   align-items: center;
-  gap: 3px;
-  width: 90px;
-  min-width: 90px;
-  padding: 5px 6px;
-  background: #2d2d2d;
-  border-right: 1px solid #3e3e42;
-  border-top: 2px solid transparent;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #2a2a2a;
+  border-right: 1px solid #1e1e1e;
   cursor: pointer;
+  transition: background 0.2s;
   user-select: none;
-  color: #ccc;
-  font-size: 12px;
-  transition: background 0.15s;
-  box-sizing: border-box;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.custom-tab.error {
+  background: #3a2a2a;
+  border-color: #6a4040;
+  opacity: 0.8;
+}
+
+.custom-tab.error .error-indicator {
+  color: #ff4d4f;
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+/* Draggable tab styles */
+.custom-tab[draggable="true"] {
+  cursor: grab;
+}
+
+.custom-tab[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .custom-tab:hover {
   background: #363636;
+  transform: translateY(-2px);
 }
 
 .custom-tab.active {
@@ -133,10 +152,15 @@
 }
 
 /* Pin first tab so close-button stays at fixed screen position */
+/* Temporarily disable sticky during drag to allow smooth reordering */
 .custom-tab:first-child {
   position: sticky;
   left: 0;
   z-index: 10;
+}
+
+.custom-tab:first-child:active {
+  position: relative; /* Disable sticky when dragging */
 }
 
 .custom-tab-icon {
@@ -170,6 +194,25 @@
 
 .editor-tab-close:hover {
   color: #fff;
+}
+
+/* Rename input for tab double-click rename */
+.editor-rename-input {
+  flex: 1;
+  height: 24px;
+  line-height: 24px;
+  padding: 0 8px;
+  font-size: 13px;
+  background: #2a2a2a;
+  border: 1px solid #4a9eff;
+  border-radius: 3px;
+  color: #e0e0e0;
+}
+
+.editor-rename-input:focus {
+  outline: none;
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
 }
 
 /* "..." button to list all open files */
@@ -211,8 +254,45 @@
 }
 
 .editor-pane-active {
-  visibility: visible;
-  pointer-events: auto;
+  display: flex !important;
+  flex-direction: column;
+}
+
+/* Error state when file fails to load */
+.editor-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  color: #e0e0e0;
+  background: #1e1e1e;
+}
+
+.editor-error-state .error-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.editor-error-state h3 {
+  color: #ff4d4f;
+  margin-bottom: 12px;
+  font-size: 20px;
+}
+
+.editor-error-state p {
+  color: #999;
+  margin-bottom: 8px;
+  font-size: 14px;
+  max-width: 500px;
+}
+
+.editor-error-state .error-hint {
+  color: #666;
+  font-size: 13px;
+  font-style: italic;
 }
 
 .editor-content {

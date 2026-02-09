@@ -23,6 +23,19 @@
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
+        
+        <!-- File Access Permission Descriptions -->
+        <key>NSDocumentsFolderUsageDescription</key>
+        <string>XTerm File Manager needs access to your Documents folder to open and edit files in the terminal and editor.</string>
+        <key>NSDownloadsFolderUsageDescription</key>
+        <string>XTerm File Manager needs access to your Downloads folder to manage files.</string>
+        <key>NSDesktopFolderUsageDescription</key>
+        <string>XTerm File Manager needs access to your Desktop folder to manage files.</string>
+        <key>NSRemovableVolumesUsageDescription</key>
+        <string>XTerm File Manager needs access to external drives to manage files.</string>
+        <key>NSNetworkVolumesUsageDescription</key>
+        <string>XTerm File Manager needs access to network volumes to manage files.</string>
+        
         {{if .Info.FileAssociations}}
         <key>CFBundleDocumentTypes</key>
         <array>

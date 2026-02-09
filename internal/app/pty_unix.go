@@ -100,7 +100,7 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 		return fmt.Errorf("failed to set PTY size: %v", err)
 	}
 
-	// Create terminal session
+	// Create terminal session with UTF-8 safe buffer
 	termSession := &TerminalSession{
 		SessionID:   sessionID,
 		LocalCmd:    cmd,
@@ -109,6 +109,7 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 		stopChan:    make(chan struct{}),
 		isConnected: true,
 		isLocal:     true,
+		utf8Buffer:  &UTF8SafeBuffer{}, // Prevent UTF-8 truncation in local terminal output
 	}
 
 	// Store session (overwrite placeholder with fully initialized session)
@@ -128,6 +129,11 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 				ts.isConnected = false
 			}
 			termSessionMu.Unlock()
+
+			// Flush any remaining bytes when session ends
+			if remaining := termSession.utf8Buffer.Flush(); remaining != "" {
+				a.emitTerminalOutput(sessionID, remaining)
+			}
 		}()
 
 		buffer := make([]byte, IOBufferSize)
@@ -144,8 +150,12 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 					return
 				}
 				if n > 0 {
-					data := string(buffer[:n])
-					a.emitTerminalOutput(sessionID, data)
+					// Use UTF-8 safe buffer to prevent character truncation
+					// This is critical when window resizing triggers large output bursts
+					completeUTF8 := termSession.utf8Buffer.AppendAndFlush(buffer[:n])
+					if completeUTF8 != "" {
+						a.emitTerminalOutput(sessionID, completeUTF8)
+					}
 				}
 			}
 		}
@@ -181,14 +191,19 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 
 // ResizeLocalTerminal resizes the Unix PTY
 func resizeLocalTerminal(termSession *TerminalSession, rows, cols int) error {
+	log.Printf("🔧 [ResizeLocalTerminal] Attempting to resize local terminal to %dx%d (rows x cols)", rows, cols)
 	if termSession.LocalPTY != nil {
 		err := pty.Setsize(termSession.LocalPTY, &pty.Winsize{
 			Rows: uint16(rows),
 			Cols: uint16(cols),
 		})
 		if err != nil {
+			log.Printf("❌ [ResizeLocalTerminal] Failed to resize: %v", err)
 			return fmt.Errorf("failed to resize local terminal: %v", err)
 		}
+		log.Printf("✅ [ResizeLocalTerminal] Successfully resized to %dx%d (rows x cols)", rows, cols)
+	} else {
+		log.Printf("⚠️ [ResizeLocalTerminal] LocalPTY is nil, cannot resize")
 	}
 	return nil
 }

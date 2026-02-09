@@ -368,6 +368,48 @@ func (a *App) SetSyncSource(ruleID string, source string) error {
 	return nil
 }
 
+// TestSyncConnection tests if an SSH server is reachable and connectable.
+// It creates a temporary connection, runs a simple command, then closes it.
+func (a *App) TestSyncConnection(sshHost string) error {
+	// Find matching SSH config
+	sshConfigs := GetSSHConfig()
+	var targetConfig *SSHConfigEntry
+	for i := range sshConfigs {
+		if sshConfigs[i].Host == sshHost {
+			targetConfig = &sshConfigs[i]
+			break
+		}
+	}
+	if targetConfig == nil {
+		return fmt.Errorf("SSH host '%s' not found in config", sshHost)
+	}
+
+	// Try to establish SSH connection
+	sessionID, err := a.ConnectSSH(*targetConfig)
+	if err != nil {
+		return fmt.Errorf("connection failed: %v", err)
+	}
+
+	// Run a simple test command
+	output, err := a.ExecuteCommand(sessionID, "echo ok")
+	if err != nil {
+		// Clean up the session even if the command fails
+		a.DisconnectSSH(sessionID)
+		return fmt.Errorf("connection established but command execution failed: %v", err)
+	}
+
+	if strings.TrimSpace(output) != "ok" {
+		a.DisconnectSSH(sessionID)
+		return fmt.Errorf("unexpected command output: %s", output)
+	}
+
+	// Clean up: disconnect the temporary session
+	a.DisconnectSSH(sessionID)
+
+	log.Printf("✅ [Sync] Connection test successful for host: %s", sshHost)
+	return nil
+}
+
 // CheckRemoteSyncDeps checks if rsync and inotifywait are available on the remote server
 func (a *App) CheckRemoteSyncDeps(sessionID string) RemoteDepsStatus {
 	result := RemoteDepsStatus{}

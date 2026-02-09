@@ -9,6 +9,7 @@ import EditorTab from './components/editor/EditorTab'
 import SyncPanel from './components/sync/SyncPanel'
 import FilesTab from './components/files/FilesTab'
 import SettingsTab from './components/settings/SettingsTab'
+import LogTab from './components/log/LogTab'
 import { OnFileDrop, OnFileDropOff, EventsOn } from '../wailsjs/runtime/runtime'
 import './App.css'
 
@@ -140,6 +141,11 @@ const App: React.FC = () => {
       key: 'settings',
       label: t('settings'),
       children: <SettingsTab />,
+    },
+    {
+      key: 'log',
+      label: 'Log',
+      children: <LogTab />,
     },
   ]
 

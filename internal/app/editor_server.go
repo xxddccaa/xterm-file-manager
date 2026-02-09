@@ -33,6 +33,7 @@ func (a *App) StartEditorServer() error {
 	mux.HandleFunc("/api/write-file", a.handleWriteFile)
 	mux.HandleFunc("/api/list-files", a.handleListFiles)
 	mux.HandleFunc("/api/file-operation", a.handleFileOperation)
+	mux.HandleFunc("/api/window-closed", a.handleWindowClosed)
 
 	go func() {
 		addr := fmt.Sprintf("127.0.0.1:%d", editorServerPort)
@@ -138,6 +139,36 @@ func (a *App) handleWriteFile(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
+
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleWindowClosed handles editor window closed notifications
+func (a *App) handleWindowClosed(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		FilePath string `json:"filePath"`
+		IsRemote bool   `json:"isRemote"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Emit event to frontend for SSH config reload
+	log.Printf("📝 Editor window closed: %s", req.FilePath)
+	runtime.EventsEmit(a.ctx, "editor:window-closed", map[string]interface{}{
+		"filePath": req.FilePath,
+		"isRemote": req.IsRemote,
+	})
 
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
@@ -438,6 +469,13 @@ body {
       e.returnValue = "";
     }
   };
+
+  // Notify backend when window is closed
+  window.addEventListener("unload", function() {
+    // Use sendBeacon for reliable delivery even during page unload
+    var data = JSON.stringify({ filePath: filePath, isRemote: isRemote });
+    navigator.sendBeacon("/api/window-closed", data);
+  });
 
   // Load file content
   function loadFileContent(callback) {

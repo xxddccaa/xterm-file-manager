@@ -15,6 +15,9 @@ import { useTranslation } from 'react-i18next';
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
 import logger from '../../utils/logger'
+import { setDragPayload, clearDragPayload, getDragPayload } from '../../utils/dragState'
+import { setDragTarget } from '../../utils/dragState'
+import { dlog } from '../../utils/debugLog'
 import './FileManager.css';
 
 interface FileInfo {
@@ -57,7 +60,7 @@ const FileManager: React.FC<FileManagerProps> = ({
   const [editingPath, setEditingPath] = useState(false);
   const [pathInput, setPathInput] = useState('.');
   const [dragOver, setDragOver] = useState(false);
-  const [showHidden, setShowHidden] = useState(false);
+  const [showHidden, setShowHidden] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
     x: 0,
@@ -401,6 +404,7 @@ const FileManager: React.FC<FileManagerProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragOver(true);
+    setDragTarget('remote-fm');
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -409,15 +413,28 @@ const FileManager: React.FC<FileManagerProps> = ({
     setDragOver(false);
   };
 
+  // 'drop' never fires in Wails WKWebView, so we cannot rely on it to clear
+  // the drag-over visual state.  Listen to 'dragend' on window instead.
+  useEffect(() => {
+    const onDragEnd = () => setDragOver(false);
+    window.addEventListener('dragend', onDragEnd);
+    return () => window.removeEventListener('dragend', onDragEnd);
+  }, []);
+
   const handleDrop = async (e: React.DragEvent) => {
+    console.log('🟡 [FileManager] handleDrop fired, target:', (e.target as HTMLElement)?.className)
+    dlog('[RemoteFM] handleDrop fired')
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
 
-    const localFile = e.dataTransfer.getData('localFile');
+    // Read from shared drag state (WKWebView-safe) with dataTransfer fallback
+    const payload = getDragPayload();
+    clearDragPayload();
+    const localFile = (payload?.source === 'local' ? payload.path : '')
+      || e.dataTransfer.getData('localFile');
     if (localFile) {
       console.log('📤 Upload local file to remote:', localFile, '->', currentPath);
-      // Call upload via SFTP
       try {
         if ((window as any).go?.app?.App?.UploadFile) {
           message.loading({ content: `Uploading ${localFile}...`, key: 'upload', duration: 0 });
@@ -434,8 +451,20 @@ const FileManager: React.FC<FileManagerProps> = ({
   const handleFileDragStart = (e: React.DragEvent, file: FileInfo) => {
     const fullPath =
       currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`;
-    e.dataTransfer.setData('remoteFile', fullPath);
+    // Store path in shared memory -- WKWebView often clears dataTransfer on drop.
+    setDragPayload({ source: 'remote', path: fullPath })
+    e.dataTransfer.setData('text/plain', fullPath)
     e.dataTransfer.effectAllowed = 'copy';
+    console.log('🟢 [FileManager] dragStart, path:', fullPath)
+    dlog('[RemoteFM] dragStart path=' + fullPath)
+  };
+
+  const handleFileDragEnd = () => {
+    console.log('🔴 [FileManager] dragEnd fired')
+    dlog('[RemoteFM] dragEnd fired')
+    // NOTE: Do NOT clearDragPayload() here. The terminal's window-level
+    // dragend handler (capture phase) fires first and needs the payload.
+    // It clears the payload itself after processing.
   };
 
   const filteredFiles = showHidden
@@ -448,6 +477,7 @@ const FileManager: React.FC<FileManagerProps> = ({
   return (
     <div
       className={`file-manager-container ${dragOver ? 'drag-over' : ''}`}
+      data-current-path={currentPath}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -509,6 +539,7 @@ const FileManager: React.FC<FileManagerProps> = ({
               onContextMenu={e => handleContextMenu(e, file)}
               draggable
               onDragStart={e => handleFileDragStart(e, file)}
+              onDragEnd={handleFileDragEnd}
             >
               <span className="file-icon-wrapper">
                 {file.isDir ? (

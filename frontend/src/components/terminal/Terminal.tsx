@@ -6,6 +6,7 @@ import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { WriteToTerminal, StartTerminalSession, StartLocalTerminalSession, ResizeTerminal } from '../../../wailsjs/go/app/App'
 import { ClipboardGetText, ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import logger from '../../utils/logger'
+import { escapeShellPaths } from '../../utils/shellEscape'
 import './Terminal.css'
 
 interface TerminalProps {
@@ -465,7 +466,12 @@ const Terminal: React.FC<TerminalProps> = ({
     }
   }, [sessionId, sessionType, handleResize])
 
-  return <div ref={terminalRef} className="terminal-container" />
+  return (
+    <div
+      ref={terminalRef}
+      className="terminal-container"
+    />
+  )
 }
 
 export default Terminal

@@ -23,6 +23,7 @@
   min-width: 0;
   scrollbar-width: thin;
   scrollbar-color: #555 #252526;
+  user-select: none; /* Prevent text selection during drag */
 }
 
 .files-tab-bar::-webkit-scrollbar {
@@ -53,13 +54,23 @@
   user-select: none;
   color: #ccc;
   font-size: 12px;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.2s;
   box-sizing: border-box;
   position: relative;
 }
 
+/* Draggable tab styles */
+.files-tab[draggable="true"] {
+  cursor: grab;
+}
+
+.files-tab[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .files-tab:hover {
   background: #363636;
+  transform: translateY(-2px);
 }
 
 .files-tab.active {
@@ -73,6 +84,11 @@
   position: sticky;
   left: 0;
   z-index: 10;
+}
+
+/* Temporarily disable sticky during drag */
+.files-tab:first-child:active {
+  position: relative;
 }
 
 .files-tab-icon {
@@ -102,6 +118,26 @@
   color: #fff;
   background: rgba(255, 77, 79, 0.5);
   border-radius: 3px;
+}
+
+/* Rename input for tab double-click rename */
+.files-rename-input {
+  flex: 1;
+  height: 20px;
+  line-height: 20px;
+  padding: 0 6px;
+  font-size: 12px;
+  background: #2a2a2a;
+  border: 1px solid #4a9eff;
+  border-radius: 3px;
+  color: #e0e0e0;
+  min-width: 0;
+}
+
+.files-rename-input:focus {
+  outline: none;
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
 }
 
 /* Tab list button */
