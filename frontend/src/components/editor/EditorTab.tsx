@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Button, message, Modal, Input, Dropdown } from 'antd'
-import { PlusOutlined, SaveOutlined, CloseOutlined, FileOutlined, FolderOpenOutlined, EllipsisOutlined } from '@ant-design/icons'
+import { PlusOutlined, SaveOutlined, CloseOutlined, FileOutlined, FolderOpenOutlined, EllipsisOutlined, EditOutlined } from '@ant-design/icons'
 import Editor from '@monaco-editor/react'
 import { useTranslation } from 'react-i18next'
 import { ReadLocalFile, WriteLocalFile, CreateLocalFile, GetDefaultEditorDirectory, GetNextUntitledFileName, OpenFileDialog, SaveEditorTabs, LoadEditorTabs, ReadRemoteFile } from '../../../wailsjs/go/app/App'
@@ -61,6 +61,15 @@ const EditorTab: React.FC = () => {
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<any>(null)
+
+  // Tab context menu state (right-click)
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    visible: boolean
+    x: number
+    y: number
+    fileId: string
+    index: number
+  }>({ visible: false, x: 0, y: 0, fileId: '', index: -1 })
 
   // Use a ref to always have access to the latest files state (avoids stale closure)
   const filesRef = useRef<EditorFile[]>([])
@@ -436,6 +445,78 @@ const EditorTab: React.FC = () => {
     delete editorRefs.current[fileId]
   }
 
+  // --- Tab context menu handlers ---
+  const handleTabContextMenu = useCallback((e: React.MouseEvent, fileId: string, index: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setTabContextMenu({ visible: true, x: e.clientX, y: e.clientY, fileId, index })
+  }, [])
+
+  // Dismiss tab context menu on any click
+  useEffect(() => {
+    if (!tabContextMenu.visible) return
+    const dismiss = () => setTabContextMenu(prev => ({ ...prev, visible: false }))
+    document.addEventListener('click', dismiss)
+    return () => document.removeEventListener('click', dismiss)
+  }, [tabContextMenu.visible])
+
+  // Batch close: remove non-modified files immediately, prompt for modified ones
+  const batchCloseFiles = useCallback((keepFilter: (f: EditorFile, index: number) => boolean) => {
+    const toClose = files.filter((f, i) => !keepFilter(f, i))
+    const unmodified = toClose.filter(f => !f.modified)
+    const modified = toClose.filter(f => f.modified)
+
+    // Close all unmodified files in one state update
+    if (unmodified.length > 0) {
+      const unmodifiedIds = new Set(unmodified.map(f => f.id))
+      setFiles(prev => {
+        const newFiles = prev.filter(f => !unmodifiedIds.has(f.id))
+        if (activeFileId && unmodifiedIds.has(activeFileId)) {
+          const keepFile = files.find((f, i) => keepFilter(f, i))
+          setTimeout(() => setActiveFileId(keepFile ? keepFile.id : (newFiles.length > 0 ? newFiles[0].id : null)), 0)
+        }
+        return newFiles
+      })
+      unmodified.forEach(f => delete editorRefs.current[f.id])
+    }
+
+    // For modified files, prompt one by one (closeFileConfirmed uses functional update, safe)
+    modified.forEach(f => handleCloseFile(f.id))
+  }, [files, activeFileId])
+
+  const handleCloseCurrentTab = useCallback(() => {
+    if (tabContextMenu.fileId) {
+      handleCloseFile(tabContextMenu.fileId)
+    }
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.fileId, files])
+
+  const handleCloseTabsToLeft = useCallback(() => {
+    const idx = tabContextMenu.index
+    batchCloseFiles((_f, i) => i >= idx)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.index, batchCloseFiles])
+
+  const handleCloseTabsToRight = useCallback(() => {
+    const idx = tabContextMenu.index
+    batchCloseFiles((_f, i) => i <= idx)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.index, batchCloseFiles])
+
+  const handleCloseOtherTabs = useCallback(() => {
+    const keepId = tabContextMenu.fileId
+    batchCloseFiles((f) => f.id === keepId)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.fileId, batchCloseFiles])
+
+  const handleContextMenuRename = useCallback(() => {
+    const file = files.find(f => f.id === tabContextMenu.fileId)
+    if (file) {
+      handleTabDoubleClick(file)
+    }
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.fileId, files])
+
   // Editor change handler
   const handleEditorChange = (value: string | undefined, fileId: string) => {
     if (value === undefined) return
@@ -622,6 +703,7 @@ const EditorTab: React.FC = () => {
                 onDragEnd={handleTabDragEnd}
                 onClick={() => setActiveFileId(file.id)}
                 onDoubleClick={() => handleTabDoubleClick(file)}
+                onContextMenu={(e) => handleTabContextMenu(e, file.id, index)}
                 title={file.fileError || file.path || file.name}
               >
                 <span className="file-icon">
@@ -741,6 +823,42 @@ const EditorTab: React.FC = () => {
           autoFocus
         />
       </Modal>
+
+      {/* Tab context menu (right-click) */}
+      {tabContextMenu.visible && (
+        <div
+          className="tab-context-menu"
+          style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="tab-context-menu-item" onClick={handleCloseCurrentTab}>
+            <CloseOutlined /> <span>{t('common:closeCurrent')}</span>
+          </div>
+          <div className="tab-context-menu-divider" />
+          <div
+            className={`tab-context-menu-item ${tabContextMenu.index === 0 ? 'disabled' : ''}`}
+            onClick={tabContextMenu.index > 0 ? handleCloseTabsToLeft : undefined}
+          >
+            <span>{t('common:closeToLeft')}</span>
+          </div>
+          <div
+            className={`tab-context-menu-item ${tabContextMenu.index >= files.length - 1 ? 'disabled' : ''}`}
+            onClick={tabContextMenu.index < files.length - 1 ? handleCloseTabsToRight : undefined}
+          >
+            <span>{t('common:closeToRight')}</span>
+          </div>
+          <div
+            className={`tab-context-menu-item ${files.length <= 1 ? 'disabled' : ''}`}
+            onClick={files.length > 1 ? handleCloseOtherTabs : undefined}
+          >
+            <span>{t('common:closeOthers')}</span>
+          </div>
+          <div className="tab-context-menu-divider" />
+          <div className="tab-context-menu-item" onClick={handleContextMenuRename}>
+            <EditOutlined /> <span>{t('common:rename')}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -86,6 +86,15 @@ const TerminalTab: React.FC = () => {
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<any>(null)
 
+  // Tab context menu state (right-click)
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    visible: boolean
+    x: number
+    y: number
+    sessionId: string
+    index: number
+  }>({ visible: false, x: 0, y: 0, sessionId: '', index: -1 })
+
   useEffect(() => {
     loadSSHConfig()
     loadTerminalSettings()
@@ -473,6 +482,80 @@ const TerminalTab: React.FC = () => {
     setActiveSessionId(nextActiveSessionId)
     persistSessions(remainingSessions, nextActiveSessionId)
   }
+
+  // --- Tab context menu handlers ---
+  const handleTabContextMenu = useCallback((e: React.MouseEvent, sessionId: string, index: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setTabContextMenu({ visible: true, x: e.clientX, y: e.clientY, sessionId, index })
+  }, [])
+
+  // Dismiss tab context menu on any click
+  useEffect(() => {
+    if (!tabContextMenu.visible) return
+    const dismiss = () => setTabContextMenu(prev => ({ ...prev, visible: false }))
+    document.addEventListener('click', dismiss)
+    return () => document.removeEventListener('click', dismiss)
+  }, [tabContextMenu.visible])
+
+  // Batch close: clean up backend resources for removed sessions, then update state once
+  const batchCloseSessions = useCallback((keepFilter: (s: Session, index: number) => boolean) => {
+    const remaining = sessions.filter(keepFilter)
+    const toClose = sessions.filter((s, i) => !keepFilter(s, i))
+
+    // Clean up backend for each closed session
+    toClose.forEach(s => {
+      if (s.connected) {
+        CloseTerminalSession(s.id).catch(err => console.error('Failed to close terminal session:', err))
+        if (s.type === 'ssh') {
+          DisconnectSSH(s.id).catch(console.error)
+        }
+      }
+    })
+
+    // Decide next active tab
+    const remainingIds = new Set(remaining.map(s => s.id))
+    const nextActive = activeSessionId && remainingIds.has(activeSessionId)
+      ? activeSessionId
+      : (remaining.length > 0 ? remaining[0].id : null)
+
+    setSessions(remaining)
+    setActiveSessionId(nextActive)
+    persistSessions(remaining, nextActive)
+  }, [sessions, activeSessionId, persistSessions])
+
+  const handleCloseCurrentTab = useCallback(() => {
+    if (tabContextMenu.sessionId) {
+      handleCloseSession(tabContextMenu.sessionId)
+    }
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.sessionId, sessions, activeSessionId])
+
+  const handleCloseTabsToLeft = useCallback(() => {
+    const idx = tabContextMenu.index
+    batchCloseSessions((_s, i) => i >= idx)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.index, batchCloseSessions])
+
+  const handleCloseTabsToRight = useCallback(() => {
+    const idx = tabContextMenu.index
+    batchCloseSessions((_s, i) => i <= idx)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.index, batchCloseSessions])
+
+  const handleCloseOtherTabs = useCallback(() => {
+    const keepId = tabContextMenu.sessionId
+    batchCloseSessions((s) => s.id === keepId)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.sessionId, batchCloseSessions])
+
+  const handleContextMenuRename = useCallback(() => {
+    const session = sessions.find(s => s.id === tabContextMenu.sessionId)
+    if (session) {
+      handleTabDoubleClick(session)
+    }
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.sessionId, sessions])
 
   // Draggable divider logic
   const handleMouseDown = useCallback((dividerIndex: number, e: React.MouseEvent) => {
@@ -896,6 +979,7 @@ const TerminalTab: React.FC = () => {
                 onDragEnd={handleTabDragEnd}
                 onClick={() => setActiveSessionId(session.id)}
                 onDoubleClick={() => handleTabDoubleClick(session)}
+                onContextMenu={(e) => handleTabContextMenu(e, session.id, index)}
               >
                 <span className="session-status" style={{ color: session.connected ? '#52c41a' : '#ff4d4f' }}>
                   ●
@@ -1124,6 +1208,41 @@ const TerminalTab: React.FC = () => {
           })
           )}
         </div>
+        {/* Tab context menu (right-click) */}
+        {tabContextMenu.visible && (
+          <div
+            className="tab-context-menu"
+            style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="tab-context-menu-item" onClick={handleCloseCurrentTab}>
+              <CloseOutlined /> <span>{t('common:closeCurrent')}</span>
+            </div>
+            <div className="tab-context-menu-divider" />
+            <div
+              className={`tab-context-menu-item ${tabContextMenu.index === 0 ? 'disabled' : ''}`}
+              onClick={tabContextMenu.index > 0 ? handleCloseTabsToLeft : undefined}
+            >
+              <span>{t('common:closeToLeft')}</span>
+            </div>
+            <div
+              className={`tab-context-menu-item ${tabContextMenu.index >= sessions.length - 1 ? 'disabled' : ''}`}
+              onClick={tabContextMenu.index < sessions.length - 1 ? handleCloseTabsToRight : undefined}
+            >
+              <span>{t('common:closeToRight')}</span>
+            </div>
+            <div
+              className={`tab-context-menu-item ${sessions.length <= 1 ? 'disabled' : ''}`}
+              onClick={sessions.length > 1 ? handleCloseOtherTabs : undefined}
+            >
+              <span>{t('common:closeOthers')}</span>
+            </div>
+            <div className="tab-context-menu-divider" />
+            <div className="tab-context-menu-item" onClick={handleContextMenuRename}>
+              <EditOutlined /> <span>{t('common:rename')}</span>
+            </div>
+          </div>
+        )}
       </Content>
     </Layout>
   )

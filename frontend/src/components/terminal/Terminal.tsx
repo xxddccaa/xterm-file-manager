@@ -1,7 +1,13 @@
-import React, { useEffect, useRef, useCallback } from 'react'
-import { Terminal as XTerm } from 'xterm'
-import { FitAddon } from 'xterm-addon-fit'
-import 'xterm/css/xterm.css'
+import React, { useEffect, useRef, useCallback, useState } from 'react'
+import { Terminal as XTerm } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import { SearchAddon } from '@xterm/addon-search'
+import { CanvasAddon } from '@xterm/addon-canvas'
+import { WebglAddon } from '@xterm/addon-webgl'
+import { ImageAddon, IImageAddonOptions } from '@xterm/addon-image'
+import '@xterm/xterm/css/xterm.css'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { WriteToTerminal, StartTerminalSession, StartLocalTerminalSession, ResizeTerminal } from '../../../wailsjs/go/app/App'
 import { ClipboardGetText, ClipboardSetText } from '../../../wailsjs/runtime/runtime'
@@ -29,6 +35,7 @@ const Terminal: React.FC<TerminalProps> = ({
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const searchAddonRef = useRef<SearchAddon | null>(null)
   // Guard: prevent duplicate startSession calls (React StrictMode / fast re-renders)
   const sessionStartedRef = useRef<string | null>(null)
   // Track whether this terminal tab is currently visible
@@ -39,6 +46,11 @@ const Terminal: React.FC<TerminalProps> = ({
   const enableSelectToCopyRef = useRef(enableSelectToCopy)
   const enableRightClickPasteRef = useRef(enableRightClickPaste)
 
+  // Search bar state
+  const [searchVisible, setSearchVisible] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     enableSelectToCopyRef.current = enableSelectToCopy
   }, [enableSelectToCopy])
@@ -46,6 +58,48 @@ const Terminal: React.FC<TerminalProps> = ({
   useEffect(() => {
     enableRightClickPasteRef.current = enableRightClickPaste
   }, [enableRightClickPaste])
+
+  // Focus search input when it becomes visible
+  useEffect(() => {
+    if (searchVisible && searchInputRef.current) {
+      searchInputRef.current.focus()
+      // If there's existing search text, select it for easy replacement
+      searchInputRef.current.select()
+    }
+  }, [searchVisible])
+
+  // Perform search when searchText changes
+  useEffect(() => {
+    if (!searchAddonRef.current) return
+    if (searchText) {
+      searchAddonRef.current.findNext(searchText)
+    } else {
+      searchAddonRef.current.clearDecorations()
+    }
+  }, [searchText])
+
+  const handleSearchNext = useCallback(() => {
+    if (searchAddonRef.current && searchText) {
+      searchAddonRef.current.findNext(searchText)
+    }
+  }, [searchText])
+
+  const handleSearchPrev = useCallback(() => {
+    if (searchAddonRef.current && searchText) {
+      searchAddonRef.current.findPrevious(searchText)
+    }
+  }, [searchText])
+
+  const handleSearchClose = useCallback(() => {
+    setSearchVisible(false)
+    if (searchAddonRef.current) {
+      searchAddonRef.current.clearDecorations()
+    }
+    // Re-focus terminal
+    if (xtermRef.current) {
+      xtermRef.current.focus()
+    }
+  }, [])
 
   // Debounced resize handler to avoid rapid-fire resize calls
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -98,10 +152,12 @@ const Terminal: React.FC<TerminalProps> = ({
       xtermRef.current.dispose()
       xtermRef.current = null
       fitAddonRef.current = null
+      searchAddonRef.current = null
     }
 
     // Create xterm instance with theme
     const term = new XTerm({
+      allowProposedApi: true,  // Required by @xterm/addon-image and other proposed APIs
       cursorBlink: true,
       fontSize: 14,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -109,7 +165,7 @@ const Terminal: React.FC<TerminalProps> = ({
         background: '#1e1e1e',
         foreground: '#d4d4d4',
         cursor: '#aeafad',
-        selection: '#264f78',
+        selectionBackground: '#264f78',
         black: '#000000',
         red: '#cd3131',
         green: '#0dbc79',
@@ -129,17 +185,72 @@ const Terminal: React.FC<TerminalProps> = ({
       },
       rightClickSelectsWord: false,
       disableStdin: false,
-      // Enable bracketed paste mode for better multiline paste handling
-      // This allows shells like zsh to show @zsh (1-5) indicators
       allowTransparency: false,
-      macOptionIsMeta: navigator.platform.toUpperCase().indexOf('MAC') >= 0, // Only true on macOS
+      macOptionIsMeta: navigator.platform.toUpperCase().indexOf('MAC') >= 0,
       scrollback: 10000,
     })
 
-    // Create and attach fit addon
+    // --- Load addons ---
+
+    // 1. Fit addon: auto-resize terminal to container
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
+
+    // 2. Unicode11 addon: correct emoji & CJK wide character width
+    const unicode11Addon = new Unicode11Addon()
+    term.loadAddon(unicode11Addon)
+    term.unicode.activeVersion = '11'
+
+    // 3. Web Links addon: clickable URLs in terminal output
+    const webLinksAddon = new WebLinksAddon((event, uri) => {
+      // Open URL in default browser
+      window.open(uri, '_blank')
+    })
+    term.loadAddon(webLinksAddon)
+
+    // 4. Search addon: Cmd/Ctrl+F terminal search
+    const searchAddon = new SearchAddon()
+    term.loadAddon(searchAddon)
+    searchAddonRef.current = searchAddon
+
+    // 5. Image addon: inline image display (sixel, iTerm2 protocol)
+    const imageAddon = new ImageAddon({
+      sixelSupport: true,
+      sixelScrolling: true,
+      sixelPaletteLimit: 4096,
+      enableSizeReports: true,
+      showPlaceholder: true,
+    } as IImageAddonOptions)
+    term.loadAddon(imageAddon)
+
+    // Open terminal in DOM
     term.open(terminalRef.current)
+
+    // 6. GPU-accelerated renderer: try WebGL first, fallback to Canvas
+    try {
+      const webglAddon = new WebglAddon()
+      webglAddon.onContextLoss(() => {
+        logger.log('⚠️ [Terminal] WebGL context lost, falling back to Canvas renderer')
+        webglAddon.dispose()
+        try {
+          term.loadAddon(new CanvasAddon())
+          logger.log('✅ [Terminal] Canvas renderer loaded as fallback')
+        } catch (canvasErr) {
+          logger.log('⚠️ [Terminal] Canvas renderer also failed, using default DOM renderer')
+        }
+      })
+      term.loadAddon(webglAddon)
+      logger.log('✅ [Terminal] WebGL renderer loaded')
+    } catch (webglErr) {
+      logger.log('⚠️ [Terminal] WebGL renderer unavailable, trying Canvas...')
+      try {
+        term.loadAddon(new CanvasAddon())
+        logger.log('✅ [Terminal] Canvas renderer loaded')
+      } catch (canvasErr) {
+        logger.log('⚠️ [Terminal] Canvas renderer also failed, using default DOM renderer')
+      }
+    }
+
     fitAddon.fit()
 
     xtermRef.current = term
@@ -231,6 +342,20 @@ const Terminal: React.FC<TerminalProps> = ({
       };
       
       logger.log('🖥️ [Terminal] KeyEvent:', keyInfo);
+
+      // Handle Cmd+F (Mac) / Ctrl+F (other) - toggle search bar
+      if ((isMac && event.metaKey && isKey(event, 'f', 'KeyF') && !event.ctrlKey) ||
+          (!isMac && event.ctrlKey && isKey(event, 'f', 'KeyF') && !event.metaKey)) {
+        event.preventDefault()
+        setSearchVisible(prev => !prev)
+        return false
+      }
+
+      // Handle Escape - close search bar if visible
+      if (event.key === 'Escape') {
+        // Let the search bar's own onKeyDown handle it if search is visible
+        // Only intercept if we need to close it from terminal context
+      }
 
       // Handle Cmd+C (Mac) - copy if selection, otherwise send interrupt (SIGINT)
       // Mac users naturally use Cmd+C like Ctrl+C on Linux/Windows
@@ -460,6 +585,7 @@ const Terminal: React.FC<TerminalProps> = ({
         xtermRef.current = null
       }
       fitAddonRef.current = null
+      searchAddonRef.current = null
       // NOTE: Do NOT reset sessionStartedRef here!
       // React StrictMode unmount/remount preserves refs — if we reset it,
       // the guard fails and startSession runs twice, creating duplicate PTYs.
@@ -467,10 +593,41 @@ const Terminal: React.FC<TerminalProps> = ({
   }, [sessionId, sessionType, handleResize])
 
   return (
-    <div
-      ref={terminalRef}
-      className="terminal-container"
-    />
+    <div className="terminal-wrapper">
+      {/* Search bar overlay */}
+      {searchVisible && (
+        <div className="terminal-search-bar">
+          <input
+            ref={searchInputRef}
+            className="terminal-search-input"
+            type="text"
+            placeholder="Search..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (e.shiftKey) {
+                  handleSearchPrev()
+                } else {
+                  handleSearchNext()
+                }
+              }
+              if (e.key === 'Escape') {
+                handleSearchClose()
+              }
+              e.stopPropagation()
+            }}
+          />
+          <button className="terminal-search-btn" onClick={handleSearchPrev} title="Previous (Shift+Enter)">▲</button>
+          <button className="terminal-search-btn" onClick={handleSearchNext} title="Next (Enter)">▼</button>
+          <button className="terminal-search-btn terminal-search-close" onClick={handleSearchClose} title="Close (Esc)">✕</button>
+        </div>
+      )}
+      <div
+        ref={terminalRef}
+        className="terminal-container"
+      />
+    </div>
   )
 }
 

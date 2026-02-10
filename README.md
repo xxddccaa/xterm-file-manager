@@ -37,6 +37,28 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.38 - Tab Context Menu & Terminal Addons Upgrade (2026-02-10)
+
+**New Features:**
+- **Tab Right-Click Context Menu**: All tab-based views (Terminal, Editor, Files) now support right-click context menu with:
+  - Close — close the clicked tab
+  - Close All to the Left — close all tabs to the left of clicked tab
+  - Close All to the Right — close all tabs to the right of clicked tab
+  - Close All Others — close all tabs except the clicked one
+  - Rename — rename the clicked tab
+  - Disabled state for menu items when action not applicable (e.g. no tabs to the left)
+- **Terminal Search**: `Cmd+F` / `Ctrl+F` opens in-terminal search bar with next/prev navigation and real-time highlighting
+
+**Terminal Enhancements:**
+- **xterm.js Package Upgrade**: Migrated from deprecated `xterm` to new `@xterm/xterm@5.5.0` package family
+- **WebGL Renderer**: GPU-accelerated rendering with automatic fallback chain: WebGL → Canvas → DOM
+- **Unicode 11 Support**: Correct rendering of emoji (😊) and CJK wide characters (占2列宽)
+- **Clickable URLs**: URLs in terminal output are automatically detected and clickable
+- **Inline Images**: Support for Sixel and iTerm2 inline image protocols
+
+**Bug Fixes:**
+- **Batch Tab Close**: Fixed batch close operations (Close Left/Right/Others) only closing one tab instead of all — caused by React state closure snapshot issue; now uses single-state-update pattern
+
 ### v2.37 - Drag & Drop Fix & Debug Log Tab (2026-02-09)
 
 **Bug Fixes:**

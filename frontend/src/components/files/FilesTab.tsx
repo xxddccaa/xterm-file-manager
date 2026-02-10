@@ -5,6 +5,7 @@ import {
   CloseOutlined,
   FolderOutlined,
   EllipsisOutlined,
+  EditOutlined,
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import FileBrowserPanel from './FileBrowserPanel'
@@ -35,6 +36,15 @@ const FilesTab: React.FC = () => {
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<any>(null)
+
+  // Tab context menu state (right-click)
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    visible: boolean
+    x: number
+    y: number
+    tabId: string
+    index: number
+  }>({ visible: false, x: 0, y: 0, tabId: '', index: -1 })
 
   // Create a new tab - always creates, even if same path exists
   const createTab = useCallback((path: string) => {
@@ -210,6 +220,67 @@ const FilesTab: React.FC = () => {
     [activeTabId]
   )
 
+  // --- Tab context menu handlers ---
+  const handleTabContextMenu = useCallback((e: React.MouseEvent, tabId: string, index: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setTabContextMenu({ visible: true, x: e.clientX, y: e.clientY, tabId, index })
+  }, [])
+
+  // Dismiss tab context menu on any click
+  useEffect(() => {
+    if (!tabContextMenu.visible) return
+    const dismiss = () => setTabContextMenu(prev => ({ ...prev, visible: false }))
+    document.addEventListener('click', dismiss)
+    return () => document.removeEventListener('click', dismiss)
+  }, [tabContextMenu.visible])
+
+  // Batch close: remove multiple tabs in one state update
+  const batchCloseTabs = useCallback((keepFilter: (t: TabData, index: number) => boolean) => {
+    const remaining = tabs.filter(keepFilter)
+    const remainingIds = new Set(remaining.map(t => t.id))
+
+    const nextActive = activeTabId && remainingIds.has(activeTabId)
+      ? activeTabId
+      : (remaining.length > 0 ? remaining[0].id : null)
+
+    setTabs(remaining)
+    setActiveTabId(nextActive)
+  }, [tabs, activeTabId])
+
+  const handleCloseCurrentTab = useCallback(() => {
+    if (tabContextMenu.tabId) {
+      handleCloseTab(tabContextMenu.tabId)
+    }
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.tabId, handleCloseTab])
+
+  const handleCloseTabsToLeft = useCallback(() => {
+    const idx = tabContextMenu.index
+    batchCloseTabs((_t, i) => i >= idx)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.index, batchCloseTabs])
+
+  const handleCloseTabsToRight = useCallback(() => {
+    const idx = tabContextMenu.index
+    batchCloseTabs((_t, i) => i <= idx)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.index, batchCloseTabs])
+
+  const handleCloseOtherTabs = useCallback(() => {
+    const keepId = tabContextMenu.tabId
+    batchCloseTabs((t) => t.id === keepId)
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.tabId, batchCloseTabs])
+
+  const handleContextMenuRename = useCallback(() => {
+    const tab = tabs.find(t => t.id === tabContextMenu.tabId)
+    if (tab) {
+      handleTabDoubleClick(tab)
+    }
+    setTabContextMenu(prev => ({ ...prev, visible: false }))
+  }, [tabContextMenu.tabId, tabs])
+
   const handleTabPathChange = useCallback(
     (tabId: string, newPath: string) => {
       setTabs(prev =>
@@ -329,6 +400,7 @@ const FilesTab: React.FC = () => {
               className={`files-tab ${tab.id === activeTabId ? 'active' : ''}`}
               onClick={() => setActiveTabId(tab.id)}
               onDoubleClick={() => handleTabDoubleClick(tab)}
+              onContextMenu={(e) => handleTabContextMenu(e, tab.id, index)}
               draggable={true}
               onDragStart={e => handleTabDragStart(e, index)}
               onDragOver={e => handleTabDragOver(e, index)}
@@ -418,6 +490,42 @@ const FilesTab: React.FC = () => {
           ))
         )}
       </div>
+
+      {/* Tab context menu (right-click) */}
+      {tabContextMenu.visible && (
+        <div
+          className="tab-context-menu"
+          style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="tab-context-menu-item" onClick={handleCloseCurrentTab}>
+            <CloseOutlined /> <span>{t('common:closeCurrent')}</span>
+          </div>
+          <div className="tab-context-menu-divider" />
+          <div
+            className={`tab-context-menu-item ${tabContextMenu.index === 0 ? 'disabled' : ''}`}
+            onClick={tabContextMenu.index > 0 ? handleCloseTabsToLeft : undefined}
+          >
+            <span>{t('common:closeToLeft')}</span>
+          </div>
+          <div
+            className={`tab-context-menu-item ${tabContextMenu.index >= tabs.length - 1 ? 'disabled' : ''}`}
+            onClick={tabContextMenu.index < tabs.length - 1 ? handleCloseTabsToRight : undefined}
+          >
+            <span>{t('common:closeToRight')}</span>
+          </div>
+          <div
+            className={`tab-context-menu-item ${tabs.length <= 1 ? 'disabled' : ''}`}
+            onClick={tabs.length > 1 ? handleCloseOtherTabs : undefined}
+          >
+            <span>{t('common:closeOthers')}</span>
+          </div>
+          <div className="tab-context-menu-divider" />
+          <div className="tab-context-menu-item" onClick={handleContextMenuRename}>
+            <EditOutlined /> <span>{t('common:rename')}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
