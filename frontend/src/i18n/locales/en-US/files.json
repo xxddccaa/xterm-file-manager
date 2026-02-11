@@ -46,5 +46,9 @@
   "file": "file",
   "home": "Home",
   "noTabsOpen": "No tabs open",
-  "clickToOpenOrDragFiles": "Click + to open a new tab or drag files from Finder"
+  "clickToOpenOrDragFiles": "Click + to open a new tab or drag files from Finder",
+  "copyToClipboard": "Copy to System Clipboard",
+  "copiedToClipboard": "\"{{name}}\" copied to system clipboard",
+  "copyToClipboardFailed": "Copy to clipboard failed: {{error}}",
+  "downloadingForClipboard": "Downloading for clipboard..."
 }

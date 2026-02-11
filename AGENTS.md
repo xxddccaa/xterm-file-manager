@@ -340,6 +340,14 @@ logger.log('❌ [Terminal] Failed to copy:', err)
     - Log tab has **Copy All** button to copy all logs for pasting into bug reports
     - `dlog()` also mirrors to `console.log` for development mode
     - All drag-and-drop related code uses `dlog()` for traceability
+14. **System Clipboard File Copy**: All three file managers (FileManager, LocalFileManager, FileBrowserPanel) support "Copy to System Clipboard" via right-click context menu. This copies files to the OS pasteboard so users can paste into external apps (Finder, Feishu, WeChat, etc.).
+    - **macOS**: Uses `NSPasteboard writeObjects:` with `NSURL fileURLWithPath:` via CGo (`clipboard_darwin.go`)
+    - **Windows**: Uses PowerShell `Set-Clipboard -Path` to set CF_HDROP format (`clipboard_windows.go`)
+    - **Linux**: Stub returns "not supported" (`clipboard_stub.go`)
+    - **Local files**: Direct clipboard write via `CopyFilesToSystemClipboard(paths)`
+    - **Remote files**: Two-step: download to temp dir via SFTP, then clipboard write via `CopyRemoteFilesToSystemClipboard(sessionID, remotePaths)`
+    - **Temp cleanup**: Temp directories tracked in `tempDirs` slice, cleaned on app shutdown via `CleanupTempDirs()` called from `OnShutdown` in `main.go`
+    - **Distinction from in-app clipboard**: `SetFileClipboard`/`PasteFiles` is the app-internal clipboard (memory-only, for Copy/Cut/Paste within the app). `CopyFilesToSystemClipboard` writes to the OS pasteboard for cross-app sharing.
 
 ## Common Patterns
 

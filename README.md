@@ -37,6 +37,24 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.39 - System Clipboard & Multi-Select (2026-02-12)
+
+**New Features:**
+- **Copy to System Clipboard**: Right-click any file/folder in all three file managers (Remote, Local, FileBrowser) → "Copy to System Clipboard" — paste into Finder, Feishu, WeChat, Slack, etc. with Cmd+V
+  - macOS: Native `NSPasteboard writeObjects:` via CGo/Objective-C for zero-dependency OS integration
+  - Windows: PowerShell `Set-Clipboard -Path` for CF_HDROP clipboard format
+  - Remote files: Auto-download via SFTP to temp directory, then copy to clipboard; supports both files and directories (recursive download)
+  - Temp directory cleanup on app shutdown via `OnShutdown` hook
+- **Multi-File Selection**: All three file managers now support multi-select
+  - **Cmd+Click** (Mac) / **Ctrl+Click** (Windows): Toggle individual file selection
+  - **Shift+Click**: Range select from last clicked file to current
+  - **Shift+Cmd+Click**: Append range to existing selection
+  - Right-click context menu operates on all selected files (batch clipboard copy, batch in-app copy/cut)
+  - Selection count shown in context menu labels and status bar
+
+**Bug Fixes:**
+- **Remote folder clipboard**: Fixed `CopyRemoteFilesToSystemClipboard` failing on directories — now detects file vs directory via `sftpClient.Stat()` and routes to `DownloadFile` or `DownloadDirectory` accordingly
+
 ### v2.38 - Tab Context Menu & Terminal Addons Upgrade (2026-02-10)
 
 **New Features:**

@@ -13,9 +13,13 @@ export function CloseTerminalSession(arg1:string):Promise<void>;
 
 export function ConnectSSH(arg1:app.SSHConfigEntry):Promise<string>;
 
+export function CopyFilesToSystemClipboard(arg1:Array<string>):Promise<void>;
+
 export function CopyLocalDirectory(arg1:string,arg2:string):Promise<void>;
 
 export function CopyLocalFile(arg1:string,arg2:string):Promise<void>;
+
+export function CopyRemoteFilesToSystemClipboard(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function CreateLocalDirectory(arg1:string):Promise<void>;
 

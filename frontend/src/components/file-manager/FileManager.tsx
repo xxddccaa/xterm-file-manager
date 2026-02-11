@@ -10,6 +10,7 @@ import {
   ArrowLeftOutlined,
   DeleteOutlined,
   EditOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { main } from '../../../wailsjs/go/models'
@@ -56,7 +57,8 @@ const FileManager: React.FC<FileManagerProps> = ({
   // This avoids permission issues when connecting to servers where user can't access /root
   const [currentPath, setCurrentPath] = useState('.');
   const [loading, setLoading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [lastClickedFile, setLastClickedFile] = useState<string | null>(null);
   const [editingPath, setEditingPath] = useState(false);
   const [pathInput, setPathInput] = useState('.');
   const [dragOver, setDragOver] = useState(false);
@@ -133,7 +135,7 @@ const FileManager: React.FC<FileManagerProps> = ({
       return tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable
     }
 
-    logger.log('🎯 [FileManager] Installing keyboard listener, selectedFile:', selectedFile);
+    logger.log('🎯 [FileManager] Installing keyboard listener, selectedFiles:', [...selectedFiles]);
     
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return
@@ -145,7 +147,7 @@ const FileManager: React.FC<FileManagerProps> = ({
         meta: e.metaKey,
         alt: e.altKey,
         shift: e.shiftKey,
-        selectedFile,
+        selectedFiles: [...selectedFiles],
         target: (e.target as HTMLElement)?.tagName
       };
       
@@ -156,18 +158,19 @@ const FileManager: React.FC<FileManagerProps> = ({
         (isMac && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && isKey(e, 'r', 'KeyR')) ||
         (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey)
 
-      // Rename selected file
-      if (isRenameShortcut && selectedFile) {
-        logger.log('✅ [FileManager] Rename shortcut pressed with selected file:', selectedFile);
+      // Rename: only works when exactly one file is selected
+      const singleSelected = selectedFiles.size === 1 ? [...selectedFiles][0] : null;
+      if (isRenameShortcut && singleSelected) {
+        logger.log('✅ [FileManager] Rename shortcut pressed with selected file:', singleSelected);
         e.preventDefault();
         e.stopPropagation();
-        const file = files.find(f => f.name === selectedFile);
+        const file = files.find(f => f.name === singleSelected);
         if (file) {
           logger.log('📝 [FileManager] Opening rename dialog for:', file.name);
           setRenamingFile(file);
           setNewFileName(file.name);
         }
-      } else if (isRenameShortcut && !selectedFile) {
+      } else if (isRenameShortcut && selectedFiles.size === 0) {
         logger.log('⚠️ [FileManager] Rename shortcut pressed but no file selected');
       }
     };
@@ -177,7 +180,7 @@ const FileManager: React.FC<FileManagerProps> = ({
       logger.log('🎯 [FileManager] Removing keyboard listener');
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [selectedFile, files]);
+  }, [selectedFiles, files]);
 
   const loadFiles = async (path: string) => {
     try {
@@ -203,10 +206,35 @@ const FileManager: React.FC<FileManagerProps> = ({
     }
   };
 
-  const handleFileClick = (file: FileInfo) => {
-    // Single click: select (for both files and directories, like Finder/Explorer)
-    // Double click: navigate into directory / open file
-    setSelectedFile(file.name === selectedFile ? null : file.name);
+  const handleFileClick = (e: React.MouseEvent, file: FileInfo) => {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isMultiKey = isMac ? e.metaKey : e.ctrlKey;
+    const isRangeKey = e.shiftKey;
+
+    if (isRangeKey && lastClickedFile) {
+      // Shift+Click: range select from lastClickedFile to current
+      const fileNames = filteredFiles.map(f => f.name);
+      const startIdx = fileNames.indexOf(lastClickedFile);
+      const endIdx = fileNames.indexOf(file.name);
+      if (startIdx >= 0 && endIdx >= 0) {
+        const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+        const rangeNames = fileNames.slice(from, to + 1);
+        setSelectedFiles(new Set(isMultiKey ? [...selectedFiles, ...rangeNames] : rangeNames));
+      }
+    } else if (isMultiKey) {
+      // Cmd/Ctrl+Click: toggle individual file
+      const newSet = new Set(selectedFiles);
+      if (newSet.has(file.name)) {
+        newSet.delete(file.name);
+      } else {
+        newSet.add(file.name);
+      }
+      setSelectedFiles(newSet);
+    } else {
+      // Normal click: select only this file
+      setSelectedFiles(new Set(selectedFiles.has(file.name) && selectedFiles.size === 1 ? [] : [file.name]));
+    }
+    setLastClickedFile(file.name);
     fileListRef.current?.focus();
   };
 
@@ -229,7 +257,10 @@ const FileManager: React.FC<FileManagerProps> = ({
   const handleContextMenu = (e: React.MouseEvent, file: FileInfo) => {
     e.preventDefault();
     e.stopPropagation();
-    setSelectedFile(file.name);
+    // If right-clicked file is not in current selection, select only it
+    if (!selectedFiles.has(file.name)) {
+      setSelectedFiles(new Set([file.name]));
+    }
     setContextMenu({
       visible: true,
       x: e.clientX,
@@ -315,6 +346,25 @@ const FileManager: React.FC<FileManagerProps> = ({
     setRenamingFile(contextMenu.file);
     setNewFileName(contextMenu.file.name);
     setContextMenu(prev => ({ ...prev, visible: false }));
+  };
+
+  const handleCopyToSystemClipboard = async () => {
+    setContextMenu(prev => ({ ...prev, visible: false }));
+    // Collect all selected file paths
+    const selectedNames = selectedFiles.size > 0 ? [...selectedFiles] : (contextMenu.file ? [contextMenu.file.name] : []);
+    if (selectedNames.length === 0) return;
+    const remotePaths = selectedNames.map(name =>
+      currentPath === '/' ? `/${name}` : `${currentPath}/${name}`
+    );
+    try {
+      message.loading({ content: t('files:downloadingForClipboard'), key: 'clipboard', duration: 0 });
+      if ((window as any).go?.app?.App?.CopyRemoteFilesToSystemClipboard) {
+        await (window as any).go.app.App.CopyRemoteFilesToSystemClipboard(sessionId, remotePaths);
+        message.success({ content: t('files:copiedToClipboard', { name: `${selectedNames.length} item(s)` }), key: 'clipboard' });
+      }
+    } catch (err: any) {
+      message.error({ content: t('files:copyToClipboardFailed', { error: err?.message || err }), key: 'clipboard' });
+    }
   };
 
   const handleRename = async () => {
@@ -532,9 +582,9 @@ const FileManager: React.FC<FileManagerProps> = ({
             <div
               key={`${file.name}-${index}`}
               className={`file-item ${file.isDir ? 'directory' : 'file'} ${
-                selectedFile === file.name ? 'selected' : ''
+                selectedFiles.has(file.name) ? 'selected' : ''
               }`}
-              onClick={() => handleFileClick(file)}
+              onClick={e => handleFileClick(e, file)}
               onDoubleClick={() => handleFileDoubleClick(file)}
               onContextMenu={e => handleContextMenu(e, file)}
               draggable
@@ -607,6 +657,10 @@ const FileManager: React.FC<FileManagerProps> = ({
               <span>{t('common:edit')}</span>
             </div>
           )}
+          <div className="context-menu-item" onClick={handleCopyToSystemClipboard}>
+            <CopyOutlined />
+            <span>{t('files:copyToClipboard')}{selectedFiles.size > 1 ? ` (${selectedFiles.size})` : ''}</span>
+          </div>
           <div className="context-menu-item" onClick={handleContextMenuDownload}>
             <DownloadOutlined />
             <span>{t('files:downloadToLocal')}</span>

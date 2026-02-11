@@ -46,5 +46,9 @@
   "file": "文件",
   "home": "主目录",
   "noTabsOpen": "没有打开的标签",
-  "clickToOpenOrDragFiles": "点击 + 打开新标签或从访达拖放文件"
+  "clickToOpenOrDragFiles": "点击 + 打开新标签或从访达拖放文件",
+  "copyToClipboard": "复制到系统剪贴板",
+  "copiedToClipboard": "\"{{name}}\" 已复制到系统剪贴板",
+  "copyToClipboardFailed": "复制到剪贴板失败: {{error}}",
+  "downloadingForClipboard": "正在下载到剪贴板..."
 }

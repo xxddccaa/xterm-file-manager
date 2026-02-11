@@ -15,6 +15,7 @@ import {
   PlusOutlined,
   FolderAddOutlined,
   FileAddOutlined,
+  ExportOutlined,
 } from '@ant-design/icons'
 import { Input, Button, Modal, message } from 'antd'
 import {
@@ -35,6 +36,7 @@ import {
   GetFileClipboard,
   PasteFiles,
   IsDirectory,
+  CopyFilesToSystemClipboard,
 } from '../../../wailsjs/go/app/App'
 import './FileBrowserPanel.css'
 
@@ -65,7 +67,8 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
   const [currentPath, setCurrentPath] = useState<string>(initialPath || '')
   const [files, setFiles] = useState<LocalFile[]>([])
   const [loading, setLoading] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
+  const [lastClickedFile, setLastClickedFile] = useState<string | null>(null)
   const [navigation, setNavigation] = useState<NavigationState>({ back: [], forward: [] })
   const [editingPath, setEditingPath] = useState(false)
   const [pathInput, setPathInput] = useState('')
@@ -184,9 +187,33 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
     [navigateTo]
   )
 
-  const handleFileClick = useCallback((file: LocalFile) => {
-    setSelectedFile(file.name === selectedFile ? null : file.name)
-  }, [selectedFile])
+  const handleFileClick = useCallback((e: React.MouseEvent, file: LocalFile) => {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+    const isMultiKey = isMac ? e.metaKey : e.ctrlKey
+    const isRangeKey = e.shiftKey
+
+    if (isRangeKey && lastClickedFile) {
+      const fileNames = files.map(f => f.name)
+      const startIdx = fileNames.indexOf(lastClickedFile)
+      const endIdx = fileNames.indexOf(file.name)
+      if (startIdx >= 0 && endIdx >= 0) {
+        const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx]
+        const rangeNames = fileNames.slice(from, to + 1)
+        setSelectedFiles(new Set(isMultiKey ? [...selectedFiles, ...rangeNames] : rangeNames))
+      }
+    } else if (isMultiKey) {
+      const newSet = new Set(selectedFiles)
+      if (newSet.has(file.name)) {
+        newSet.delete(file.name)
+      } else {
+        newSet.add(file.name)
+      }
+      setSelectedFiles(newSet)
+    } else {
+      setSelectedFiles(new Set(selectedFiles.has(file.name) && selectedFiles.size === 1 ? [] : [file.name]))
+    }
+    setLastClickedFile(file.name)
+  }, [selectedFiles, lastClickedFile, files])
 
   // Path editing
   const handlePathSubmit = useCallback(() => {
@@ -212,7 +239,9 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
     (e: React.MouseEvent, file: LocalFile) => {
       e.preventDefault()
       e.stopPropagation()
-      setSelectedFile(file.name)
+      if (!selectedFiles.has(file.name)) {
+        setSelectedFiles(new Set([file.name]))
+      }
       setContextMenu({
         visible: true,
         x: e.clientX,
@@ -220,7 +249,7 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
         file,
       })
     },
-    []
+    [selectedFiles]
   )
 
   // Rename
@@ -313,6 +342,19 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
         message.success(`Cut ${files.length} item(s)`)
       } catch (err: any) {
         message.error(`Cut failed: ${err?.message || err}`)
+      }
+    },
+    []
+  )
+
+  const handleCopyToSystemClipboard = useCallback(
+    async (files: LocalFile[]) => {
+      const paths = files.map(f => f.path)
+      try {
+        await CopyFilesToSystemClipboard(paths)
+        message.success(`Copied ${files.length} item(s) to system clipboard`)
+      } catch (err: any) {
+        message.error(`Copy to clipboard failed: ${err?.message || err}`)
       }
     },
     []
@@ -417,26 +459,28 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
         loadFiles(currentPath)
       }
 
-      // File operations
+      // File operations — use all selected files
       else if (hasCtrl && e.key === 'c') {
-        if (selectedFile) {
+        if (selectedFiles.size > 0) {
           e.preventDefault()
-          const file = files.find(f => f.name === selectedFile)
-          if (file) handleCopy([file])
+          const selected = files.filter(f => selectedFiles.has(f.name))
+          if (selected.length > 0) handleCopy(selected)
         }
       } else if (hasCtrl && e.key === 'x') {
-        if (selectedFile) {
+        if (selectedFiles.size > 0) {
           e.preventDefault()
-          const file = files.find(f => f.name === selectedFile)
-          if (file) handleCut([file])
+          const selected = files.filter(f => selectedFiles.has(f.name))
+          if (selected.length > 0) handleCut(selected)
         }
       } else if (hasCtrl && e.key === 'v') {
         e.preventDefault()
         handlePaste()
       } else if (e.key === 'F2' || e.key === 'Enter') {
-        if (selectedFile) {
+        // Rename only works with single selection
+        const singleSelected = selectedFiles.size === 1 ? [...selectedFiles][0] : null
+        if (singleSelected) {
           e.preventDefault()
-          const file = files.find(f => f.name === selectedFile)
+          const file = files.find(f => f.name === singleSelected)
           if (file) {
             setRenamingFile(file)
             setNewFileName(file.name)
@@ -444,8 +488,9 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
         }
       } else if (e.key === 'Delete') {
         e.preventDefault()
-        if (selectedFile) {
-          const file = files.find(f => f.name === selectedFile)
+        const singleSelected = selectedFiles.size === 1 ? [...selectedFiles][0] : null
+        if (singleSelected) {
+          const file = files.find(f => f.name === singleSelected)
           if (file) handleDelete(file)
         }
       }
@@ -453,7 +498,7 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [goBack, goForward, goUp, currentPath, selectedFile, files, handleCopy, handleCut, handlePaste, handleDelete])
+  }, [goBack, goForward, goUp, currentPath, selectedFiles, files, handleCopy, handleCut, handlePaste, handleDelete])
 
   // Render helpers
   const formatSize = (bytes: number): string => {
@@ -577,9 +622,9 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
             <div
               key={index}
               className={`fb-file-item ${file.isDir ? 'fb-dir' : 'fb-file'} ${
-                selectedFile === file.name ? 'fb-selected' : ''
+                selectedFiles.has(file.name) ? 'fb-selected' : ''
               }`}
-              onClick={() => handleFileClick(file)}
+              onClick={e => handleFileClick(e, file)}
               onDoubleClick={() => handleFileDoubleClick(file)}
               onContextMenu={e => handleContextMenu(e, file)}
             >
@@ -629,7 +674,7 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
 
       {/* Status Bar */}
       <div className="fb-statusbar">
-        <span>{files.length} items</span>
+        <span>{files.length} items{selectedFiles.size > 0 ? ` · ${selectedFiles.size} selected` : ''}</span>
         <span className="fb-status-path">{currentPath}</span>
       </div>
 
@@ -669,22 +714,24 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
           <div
             className="fb-context-item"
             onClick={() => {
-              handleCopy([contextMenu.file!])
+              const selected = files.filter(f => selectedFiles.has(f.name))
+              handleCopy(selected.length > 0 ? selected : [contextMenu.file!])
               setContextMenu(prev => ({ ...prev, visible: false }))
             }}
           >
             <CopyOutlined />
-            <span>Copy (Ctrl+C)</span>
+            <span>Copy{selectedFiles.size > 1 ? ` (${selectedFiles.size})` : ''} (Ctrl+C)</span>
           </div>
           <div
             className="fb-context-item"
             onClick={() => {
-              handleCut([contextMenu.file!])
+              const selected = files.filter(f => selectedFiles.has(f.name))
+              handleCut(selected.length > 0 ? selected : [contextMenu.file!])
               setContextMenu(prev => ({ ...prev, visible: false }))
             }}
           >
             <ScissorOutlined />
-            <span>Cut (Ctrl+X)</span>
+            <span>Cut{selectedFiles.size > 1 ? ` (${selectedFiles.size})` : ''} (Ctrl+X)</span>
           </div>
           {canPaste && (
             <div
@@ -698,6 +745,17 @@ const FileBrowserPanel: React.FC<FileBrowserPanelProps> = ({
               <span>Paste (Ctrl+V)</span>
             </div>
           )}
+          <div
+            className="fb-context-item"
+            onClick={() => {
+              const selected = files.filter(f => selectedFiles.has(f.name))
+              handleCopyToSystemClipboard(selected.length > 0 ? selected : [contextMenu.file!])
+              setContextMenu(prev => ({ ...prev, visible: false }))
+            }}
+          >
+            <ExportOutlined />
+            <span>Copy to System Clipboard{selectedFiles.size > 1 ? ` (${selectedFiles.size})` : ''}</span>
+          </div>
           <div className="fb-context-divider" />
           <div
             className="fb-context-item"

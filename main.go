@@ -194,6 +194,12 @@ func main() {
 		}
 	}
 
+	// Shutdown function: cleanup temp directories used for clipboard operations
+	shutdownFunc := func(ctx context.Context) {
+		log.Printf("🧹 App shutting down, cleaning temp directories...")
+		app.CleanupTempDirs()
+	}
+
 	// Create application with options
 	err = wails.Run(&options.App{
 		Title:            "XTerm File Manager",
@@ -203,6 +209,7 @@ func main() {
 		MinHeight:        600,
 		BackgroundColour: &options.RGBA{R: 30, G: 30, B: 30, A: 255},
 		OnStartup:        startupFunc,
+		OnShutdown:       shutdownFunc,
 		Menu:             appMenu,
 		AssetServer: &assetserver.Options{
 			Assets: distFS,

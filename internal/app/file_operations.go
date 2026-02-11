@@ -349,6 +349,151 @@ func (a *App) PasteFiles(targetDir string) error {
 	return nil
 }
 
+// ── System Clipboard (OS-level) ──────────────────────────────────────────────
+// These methods write file references to the OS pasteboard (NSPasteboard / CF_HDROP)
+// so the user can paste files into external apps like Finder, Feishu, WeChat, etc.
+
+// CopyFilesToSystemClipboard copies local file paths to the system clipboard.
+// After this call, the user can Cmd+V (macOS) or Ctrl+V (Windows) paste files
+// into Finder, Feishu, WeChat, Slack, and any app that accepts file pastes.
+func (a *App) CopyFilesToSystemClipboard(paths []string) error {
+	if len(paths) == 0 {
+		return fmt.Errorf("no files to copy")
+	}
+
+	// Expand ~ in paths
+	expandedPaths := make([]string, 0, len(paths))
+	for _, p := range paths {
+		ep, err := expandHome(p)
+		if err != nil {
+			log.Printf("⚠️ Failed to expand path %s: %v", p, err)
+			continue
+		}
+		// Verify file exists
+		if _, err := os.Stat(ep); err != nil {
+			log.Printf("⚠️ File not found: %s", ep)
+			continue
+		}
+		expandedPaths = append(expandedPaths, ep)
+	}
+
+	if len(expandedPaths) == 0 {
+		return fmt.Errorf("no valid files to copy")
+	}
+
+	log.Printf("📋 Copying %d file(s) to system clipboard: %v", len(expandedPaths), expandedPaths)
+
+	if err := copyLocalFilesToSystemClipboard(expandedPaths); err != nil {
+		return fmt.Errorf("failed to copy to system clipboard: %v", err)
+	}
+
+	log.Printf("✅ Files copied to system clipboard")
+	return nil
+}
+
+// CopyRemoteFilesToSystemClipboard downloads remote files/directories to a temp
+// directory, then copies them to the system clipboard for pasting into external apps.
+// This is a two-step operation: SFTP download + OS clipboard write.
+// Supports both files and directories — directories are recursively downloaded.
+func (a *App) CopyRemoteFilesToSystemClipboard(sessionID string, remotePaths []string) error {
+	if len(remotePaths) == 0 {
+		return fmt.Errorf("no files to copy")
+	}
+
+	// Get SFTP client to check remote path types (file vs directory)
+	sftpClient, err := getSFTPClient(sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get SFTP client: %v", err)
+	}
+
+	// Create a temp directory for staging remote files
+	tempDir, err := os.MkdirTemp("", "xterm-fm-clipboard-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp directory: %v", err)
+	}
+
+	// Track temp dir for later cleanup
+	trackTempDir(tempDir)
+
+	log.Printf("📋 Downloading %d remote item(s) to temp dir for clipboard: %s", len(remotePaths), tempDir)
+
+	localPaths := make([]string, 0, len(remotePaths))
+	for _, remotePath := range remotePaths {
+		// Resolve ~ in remote path
+		resolved := resolveRemotePath(sftpClient, remotePath)
+
+		// Check if remote path is a file or directory
+		info, err := sftpClient.Stat(resolved)
+		if err != nil {
+			log.Printf("⚠️ Failed to stat remote path %s: %v", remotePath, err)
+			continue
+		}
+
+		if info.IsDir() {
+			// Directory: use DownloadDirectory for recursive download
+			if err := a.DownloadDirectory(sessionID, remotePath, tempDir); err != nil {
+				log.Printf("⚠️ Failed to download directory %s: %v", remotePath, err)
+				continue
+			}
+			// DownloadDirectory creates tempDir/<dirname>, build the local path
+			localPaths = append(localPaths, filepath.Join(tempDir, filepath.Base(resolved)))
+		} else {
+			// File: use DownloadFile
+			localPath, err := a.DownloadFile(sessionID, remotePath, tempDir)
+			if err != nil {
+				log.Printf("⚠️ Failed to download file %s: %v", remotePath, err)
+				continue
+			}
+			localPaths = append(localPaths, localPath)
+		}
+	}
+
+	if len(localPaths) == 0 {
+		os.RemoveAll(tempDir)
+		return fmt.Errorf("failed to download any files")
+	}
+
+	// Copy the downloaded files/directories to system clipboard
+	if err := copyLocalFilesToSystemClipboard(localPaths); err != nil {
+		return fmt.Errorf("failed to copy to system clipboard: %v", err)
+	}
+
+	log.Printf("✅ Remote items copied to system clipboard (%d items)", len(localPaths))
+	return nil
+}
+
+// ── Temp Directory Cleanup ───────────────────────────────────────────────────
+
+var (
+	tempDirs   []string
+	tempDirsMu sync.Mutex
+)
+
+// trackTempDir records a temp directory for later cleanup
+func trackTempDir(dir string) {
+	tempDirsMu.Lock()
+	defer tempDirsMu.Unlock()
+	tempDirs = append(tempDirs, dir)
+}
+
+// CleanupTempDirs removes all tracked temp directories.
+// Called on app shutdown or periodically.
+func CleanupTempDirs() {
+	tempDirsMu.Lock()
+	dirs := make([]string, len(tempDirs))
+	copy(dirs, tempDirs)
+	tempDirs = nil
+	tempDirsMu.Unlock()
+
+	for _, dir := range dirs {
+		if err := os.RemoveAll(dir); err != nil {
+			log.Printf("⚠️ Failed to clean temp dir %s: %v", dir, err)
+		} else {
+			log.Printf("🧹 Cleaned temp dir: %s", dir)
+		}
+	}
+}
+
 // generateUniquePath appends " (copy)", " (copy 2)", etc. to avoid name conflicts
 func generateUniquePath(path string) string {
 	dir := filepath.Dir(path)

@@ -22,12 +22,20 @@ export function ConnectSSH(arg1) {
   return window['go']['app']['App']['ConnectSSH'](arg1);
 }
 
+export function CopyFilesToSystemClipboard(arg1) {
+  return window['go']['app']['App']['CopyFilesToSystemClipboard'](arg1);
+}
+
 export function CopyLocalDirectory(arg1, arg2) {
   return window['go']['app']['App']['CopyLocalDirectory'](arg1, arg2);
 }
 
 export function CopyLocalFile(arg1, arg2) {
   return window['go']['app']['App']['CopyLocalFile'](arg1, arg2);
+}
+
+export function CopyRemoteFilesToSystemClipboard(arg1, arg2) {
+  return window['go']['app']['App']['CopyRemoteFilesToSystemClipboard'](arg1, arg2);
 }
 
 export function CreateLocalDirectory(arg1) {
