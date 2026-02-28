@@ -330,6 +330,14 @@ const Terminal: React.FC<TerminalProps> = ({
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       if (event.type !== 'keydown') return true
 
+      // CRITICAL: Skip all processing during IME composition (Chinese/Japanese/Korean input)
+      // During IME composition, keydown events fire with isComposing=true and keyCode=229.
+      // We must let xterm.js internal CompositionHelper handle these events without
+      // any interference from our custom handler, otherwise Chinese input becomes garbled.
+      if (event.isComposing || event.keyCode === 229) {
+        return true
+      }
+
       const keyInfo = {
         type: event.type,
         key: event.key,

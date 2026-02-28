@@ -79,6 +79,13 @@ func (a *App) StartTerminalSession(sessionID string, rows int, cols int) error {
 		return fmt.Errorf("failed to request PTY: %v", err)
 	}
 
+	// Try to set UTF-8 locale environment variables for proper Chinese/CJK character support.
+	// Many SSH servers reject Setenv requests for security (AcceptEnv not configured),
+	// so we silently ignore errors here. If the remote server doesn't accept these,
+	// the user needs to configure their server's locale manually.
+	_ = sshSession.Setenv("LANG", "en_US.UTF-8")
+	_ = sshSession.Setenv("LC_ALL", "en_US.UTF-8")
+
 	// Get pipes
 	stdin, err := sshSession.StdinPipe()
 	if err != nil {

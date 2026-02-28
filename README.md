@@ -37,6 +37,13 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.40 - Chinese/CJK Input Fix (2026-02-28)
+
+**Bug Fixes:**
+- **Terminal Chinese input garbled (IME fix)**: Fixed Chinese/Japanese/Korean IME input producing garbled text in all terminals (local + SSH). Root cause: the custom key event handler in xterm.js was interfering with IME composition events. Added `isComposing` / `keyCode===229` guard to skip custom handler during IME composition, letting xterm.js internal `CompositionHelper` handle CJK input correctly.
+- **Windows terminal UTF-8 output truncation**: Fixed potential garbled output on Windows local terminals when multi-byte UTF-8 characters (Chinese, emoji) are split across `Read()` buffer boundaries. Added `UTF8SafeBuffer` to Windows ConPTY output reader, matching the existing fix in Unix/macOS terminals.
+- **SSH terminal UTF-8 locale**: Added `Setenv("LANG", "en_US.UTF-8")` and `Setenv("LC_ALL", "en_US.UTF-8")` to SSH sessions for better Chinese character support on remote servers (silently ignored if server rejects `Setenv`).
+
 ### v2.39 - System Clipboard & Multi-Select (2026-02-12)
 
 **New Features:**

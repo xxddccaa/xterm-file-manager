@@ -96,7 +96,7 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 
 	log.Printf("✅ Started Windows terminal with shell: %s, size: %dx%d", shell, cols, rows)
 
-	// Create terminal session
+	// Create terminal session with UTF-8 safe buffer
 	termSession := &TerminalSession{
 		SessionID:   sessionID,
 		LocalCmd:    cmd,
@@ -105,6 +105,7 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 		stopChan:    make(chan struct{}),
 		isConnected: true,
 		isLocal:     true,
+		utf8Buffer:  &UTF8SafeBuffer{}, // Prevent UTF-8 truncation in Windows terminal output
 	}
 
 	// Store Windows-specific session
@@ -134,6 +135,11 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 				ts.isConnected = false
 			}
 			termSessionMu.Unlock()
+
+			// Flush any remaining bytes when session ends
+			if remaining := termSession.utf8Buffer.Flush(); remaining != "" {
+				a.emitTerminalOutput(sessionID, remaining)
+			}
 		}()
 
 		buffer := make([]byte, IOBufferSize)
@@ -150,8 +156,12 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 					return
 				}
 				if n > 0 {
-					data := string(buffer[:n])
-					a.emitTerminalOutput(sessionID, data)
+					// Use UTF-8 safe buffer to prevent character truncation
+					// This is critical for Chinese/CJK characters that may be split across reads
+					completeUTF8 := termSession.utf8Buffer.AppendAndFlush(buffer[:n])
+					if completeUTF8 != "" {
+						a.emitTerminalOutput(sessionID, completeUTF8)
+					}
 				}
 			}
 		}
