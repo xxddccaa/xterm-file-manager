@@ -37,6 +37,11 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.41 - Editor Visibility Fix (2026-02-28)
+
+**Bug Fixes:**
+- **Editor pane invisible/uneditable**: Fixed critical CSS bug where opened files in the Editor tab appeared empty and could not be edited. Root cause: `.editor-pane` set `visibility: hidden` and `pointer-events: none`, but `.editor-pane-active` only overrode `display` without restoring `visibility: visible` and `pointer-events: auto`. All file types (including drag-and-drop opened files) were affected.
+
 ### v2.40 - Chinese/CJK Input Fix (2026-02-28)
 
 **Bug Fixes:**

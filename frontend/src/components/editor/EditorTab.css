@@ -256,6 +256,8 @@
 .editor-pane-active {
   display: flex !important;
   flex-direction: column;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 /* Error state when file fails to load */
