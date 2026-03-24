@@ -32,6 +32,8 @@
   "closeToLeft": "Close All to the Left",
   "closeToRight": "Close All to the Right",
   "closeOthers": "Close All Others",
+  "collapse": "Collapse",
+  "expand": "Expand",
   "terminal": "Terminal",
   "tools": "Tools",
   "editor": "Editor",

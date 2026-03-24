@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "xterm-file-manager",
-  "version": "2.41",
+  "version": "2.42",
   "outputfilename": "xterm-file-manager",
   "frontend:dir": "./frontend",
   "frontend:install": "npm install",

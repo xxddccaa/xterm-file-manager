@@ -334,16 +334,54 @@
   flex-shrink: 0;
 }
 
+.pane-header-collapsed {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 4px;
+}
+
 .pane-title {
   font-size: 12px;
   font-weight: 600;
   color: #e0e0e0;
 }
 
+.pane-title-collapsed {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  line-height: 1.1;
+}
+
 .pane-info {
   font-size: 11px;
   color: #888;
   font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.pane-collapsed {
+  min-width: 44px;
+  max-width: 44px;
+}
+
+.pane-content-hidden {
+  display: none;
+}
+
+.pane-toggle-btn {
+  color: #a0a0a0 !important;
+  min-width: 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0 !important;
+  border: none;
+}
+
+.pane-toggle-btn:hover,
+.pane-toggle-btn:focus {
+  color: #ffffff !important;
+  background: rgba(24, 144, 255, 0.18) !important;
 }
 
 .pane-content {

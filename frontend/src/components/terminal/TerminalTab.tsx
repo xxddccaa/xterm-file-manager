@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Layout, Input, Button, List, Spin, message } from 'antd'
-import { SearchOutlined, PlusOutlined, CloseOutlined, EditOutlined } from '@ant-design/icons'
+import { SearchOutlined, PlusOutlined, CloseOutlined, EditOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
@@ -40,6 +40,8 @@ interface TerminalSettings {
   enableRightClickPaste: boolean
 }
 
+type CollapsiblePane = 'remote' | 'local'
+
 const TerminalTab: React.FC = () => {
   const { t } = useTranslation(['terminal', 'common'])
   const [sshConfigs, setSshConfigs] = useState<SSHConfigEntry[]>([])
@@ -55,6 +57,10 @@ const TerminalTab: React.FC = () => {
   const [terminalSettings, setTerminalSettings] = useState<TerminalSettings>({
     enableSelectToCopy: true,
     enableRightClickPaste: true,
+  })
+  const [collapsedPanes, setCollapsedPanes] = useState<Record<CollapsiblePane, boolean>>({
+    remote: false,
+    local: false,
   })
   
   // Pane widths for resizable dividers
@@ -272,7 +278,7 @@ const TerminalTab: React.FC = () => {
         const sessionId = await ConnectSSH(config)
         setSessions(prev => prev.map(s =>
           s.id === session.id
-            ? { ...s, id: sessionId, connected: true, sshHost: host, name: s.customName || host }
+            ? { ...s, id: sessionId, connected: true, sshHost: host, name: host }
             : s
         ))
         setActiveSessionId(sessionId)
@@ -457,6 +463,32 @@ const TerminalTab: React.FC = () => {
     setRenamingSessionId(null)
     setRenameValue('')
   }
+
+  const togglePane = useCallback((pane: CollapsiblePane) => {
+    setCollapsedPanes(prev => ({
+      ...prev,
+      [pane]: !prev[pane],
+    }))
+  }, [])
+
+  const getCollapsedPaneStyle = useCallback((isCollapsed: boolean, width: number) => {
+    if (isCollapsed) {
+      return {
+        flexGrow: 0,
+        flexShrink: 0,
+        flexBasis: '44px',
+        width: '44px',
+        minWidth: '44px',
+        maxWidth: '44px',
+      }
+    }
+
+    return {
+      flexGrow: width,
+      flexShrink: 1,
+      flexBasis: 0,
+    }
+  }, [])
 
   const handleCloseSession = (sessionId: string) => {
     const closedSession = sessions.find(s => s.id === sessionId)
@@ -1024,7 +1056,11 @@ const TerminalTab: React.FC = () => {
           ) : (
             sessions.map((session) => {
               const isActive = session.id === activeSessionId
-              const sshConfig = sshConfigs.find(c => c.host === session.name)
+              const sshHost = session.sshHost || session.name
+              const sshConfig = sshConfigs.find(c => c.host === sshHost)
+              const terminalPaneWidth = session.type === 'ssh'
+                ? paneWidths[0] + (collapsedPanes.remote ? paneWidths[1] : 0) + (collapsedPanes.local ? paneWidths[2] : 0)
+                : paneWidths[0] + paneWidths[1] + (collapsedPanes.local ? paneWidths[2] : 0)
             
             // For local terminal: show Terminal + Local Files (2 panes)
             if (session.type === 'local') {
@@ -1037,7 +1073,7 @@ const TerminalTab: React.FC = () => {
                   <div 
                     className="terminal-pane"
                     style={{ 
-                      flexGrow: paneWidths[0] + paneWidths[1], 
+                      flexGrow: terminalPaneWidth, 
                       flexShrink: 1, 
                       flexBasis: 0 
                     }}
@@ -1059,25 +1095,35 @@ const TerminalTab: React.FC = () => {
                   </div>
 
                   {/* Divider */}
-                  <div 
-                    className="split-divider"
-                    onMouseDown={(e) => handleMouseDown(0, e)}
-                  />
+                  {!collapsedPanes.local && (
+                    <div 
+                      className="split-divider"
+                      onMouseDown={(e) => handleMouseDown(0, e)}
+                    />
+                  )}
 
                   {/* Local Files Pane */}
                   <div 
-                    className="local-files-pane"
-                    style={{ 
-                      flexGrow: paneWidths[2], 
-                      flexShrink: 1, 
-                      flexBasis: 0 
-                    }}
+                    className={`local-files-pane ${collapsedPanes.local ? 'pane-collapsed' : ''}`}
+                    style={getCollapsedPaneStyle(collapsedPanes.local, paneWidths[2])}
                   >
-                    <div className="pane-header">
-                      <span className="pane-title">{t('terminal:localFiles')}</span>
-                      <span className="pane-info">{t('terminal:localhost')}</span>
+                    <div className={`pane-header ${collapsedPanes.local ? 'pane-header-collapsed' : ''}`}>
+                      <span className={`pane-title ${collapsedPanes.local ? 'pane-title-collapsed' : ''}`}>
+                        {t('terminal:localFiles')}
+                      </span>
+                      {!collapsedPanes.local && (
+                        <span className="pane-info">{t('terminal:localhost')}</span>
+                      )}
+                      <Button
+                        type="text"
+                        size="small"
+                        className="pane-toggle-btn"
+                        icon={collapsedPanes.local ? <LeftOutlined /> : <RightOutlined />}
+                        title={collapsedPanes.local ? t('common:expand') : t('common:collapse')}
+                        onClick={() => togglePane('local')}
+                      />
                     </div>
-                    <div className="pane-content">
+                    <div className={`pane-content ${collapsedPanes.local ? 'pane-content-hidden' : ''}`}>
                       <LocalFileManager
                         onUploadFile={handleUploadToRemote}
                         onDownloadComplete={() => setLocalRefreshKey(k => k + 1)}
@@ -1100,14 +1146,14 @@ const TerminalTab: React.FC = () => {
                 <div 
                   className="terminal-pane"
                   style={{ 
-                    flexGrow: paneWidths[0], 
+                    flexGrow: terminalPaneWidth, 
                     flexShrink: 1, 
                     flexBasis: 0 
                   }}
                 >
                   <div className="pane-header">
                     <span className="pane-title">{t('common:terminal')}</span>
-                    <span className="pane-info">{session.name}</span>
+                    <span className="pane-info">{sshHost}</span>
                   </div>
                    <div className="pane-content">
                      <Terminal
@@ -1122,25 +1168,35 @@ const TerminalTab: React.FC = () => {
                 </div>
 
                 {/* Divider 1 */}
-                <div 
-                  className="split-divider"
-                  onMouseDown={(e) => handleMouseDown(0, e)}
-                />
+                {!collapsedPanes.remote && (
+                  <div 
+                    className="split-divider"
+                    onMouseDown={(e) => handleMouseDown(0, e)}
+                  />
+                )}
 
                 {/* Remote Files Pane */}
                 <div 
-                  className="file-manager-pane"
-                  style={{ 
-                    flexGrow: paneWidths[1], 
-                    flexShrink: 1, 
-                    flexBasis: 0 
-                  }}
+                  className={`file-manager-pane ${collapsedPanes.remote ? 'pane-collapsed' : ''}`}
+                  style={getCollapsedPaneStyle(collapsedPanes.remote, paneWidths[1])}
                 >
-                  <div className="pane-header">
-                    <span className="pane-title">{t('terminal:remoteFiles')}</span>
-                    <span className="pane-info">{session.name}</span>
+                  <div className={`pane-header ${collapsedPanes.remote ? 'pane-header-collapsed' : ''}`}>
+                    <span className={`pane-title ${collapsedPanes.remote ? 'pane-title-collapsed' : ''}`}>
+                      {t('terminal:remoteFiles')}
+                    </span>
+                    {!collapsedPanes.remote && (
+                      <span className="pane-info">{sshHost}</span>
+                    )}
+                    <Button
+                      type="text"
+                      size="small"
+                      className="pane-toggle-btn"
+                      icon={collapsedPanes.remote ? <LeftOutlined /> : <RightOutlined />}
+                      title={collapsedPanes.remote ? t('common:expand') : t('common:collapse')}
+                      onClick={() => togglePane('remote')}
+                    />
                   </div>
-                  <div className="pane-content">
+                  <div className={`pane-content ${collapsedPanes.remote ? 'pane-content-hidden' : ''}`}>
                     {sshConfig && session.connected ? (
                       <FileManager
                         connection={sshConfig}
@@ -1164,25 +1220,35 @@ const TerminalTab: React.FC = () => {
                 </div>
 
                 {/* Divider 2 */}
-                <div 
-                  className="split-divider"
-                  onMouseDown={(e) => handleMouseDown(1, e)}
-                />
+                {!collapsedPanes.local && (
+                  <div 
+                    className="split-divider"
+                    onMouseDown={(e) => handleMouseDown(1, e)}
+                  />
+                )}
 
                 {/* Local Files Pane */}
                 <div 
-                  className="local-files-pane"
-                  style={{ 
-                    flexGrow: paneWidths[2], 
-                    flexShrink: 1, 
-                    flexBasis: 0 
-                  }}
+                  className={`local-files-pane ${collapsedPanes.local ? 'pane-collapsed' : ''}`}
+                  style={getCollapsedPaneStyle(collapsedPanes.local, paneWidths[2])}
                 >
-                  <div className="pane-header">
-                    <span className="pane-title">{t('terminal:localFiles')}</span>
-                    <span className="pane-info">{t('terminal:localhost')}</span>
+                  <div className={`pane-header ${collapsedPanes.local ? 'pane-header-collapsed' : ''}`}>
+                    <span className={`pane-title ${collapsedPanes.local ? 'pane-title-collapsed' : ''}`}>
+                      {t('terminal:localFiles')}
+                    </span>
+                    {!collapsedPanes.local && (
+                      <span className="pane-info">{t('terminal:localhost')}</span>
+                    )}
+                    <Button
+                      type="text"
+                      size="small"
+                      className="pane-toggle-btn"
+                      icon={collapsedPanes.local ? <LeftOutlined /> : <RightOutlined />}
+                      title={collapsedPanes.local ? t('common:expand') : t('common:collapse')}
+                      onClick={() => togglePane('local')}
+                    />
                   </div>
-                  <div className="pane-content">
+                  <div className={`pane-content ${collapsedPanes.local ? 'pane-content-hidden' : ''}`}>
                     {session.connected ? (
                       <LocalFileManager
                         onUploadFile={handleUploadToRemote}

@@ -32,6 +32,8 @@
   "closeToLeft": "关闭左侧所有",
   "closeToRight": "关闭右侧所有",
   "closeOthers": "关闭其他所有",
+  "collapse": "收起",
+  "expand": "展开",
   "terminal": "终端",
   "tools": "工具",
   "editor": "编辑器",

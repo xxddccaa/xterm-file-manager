@@ -101,6 +101,34 @@ const Terminal: React.FC<TerminalProps> = ({
     }
   }, [])
 
+  const writePastedTextToTerminal = useCallback(async (text: string) => {
+    if (!text) return
+
+    const hasMultipleLines = text.includes('\n') || text.includes('\r')
+    const trimmedText = text.replace(/[\r\n]+$/, '')
+    if (!trimmedText) return
+
+    if (hasMultipleLines) {
+      const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
+      await WriteToTerminal(sessionId, bracketedText)
+      return
+    }
+
+    await WriteToTerminal(sessionId, trimmedText)
+  }, [sessionId])
+
+  const readClipboardText = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+      try {
+        return await navigator.clipboard.readText()
+      } catch (err) {
+        logger.log('⚠️ [Terminal] navigator.clipboard.readText() failed, falling back to Wails runtime clipboard')
+      }
+    }
+
+    return ClipboardGetText()
+  }, [])
+
   // Debounced resize handler to avoid rapid-fire resize calls
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleResize = useCallback(() => {
@@ -410,29 +438,13 @@ const Terminal: React.FC<TerminalProps> = ({
       }
       
       // Handle Ctrl+Shift+V (Linux/Windows terminal convention) - paste
+      // Browsers usually do not trigger a native paste event for this shortcut,
+      // so we read from the clipboard API directly here.
       if (!isMac && event.ctrlKey && event.shiftKey && isKey(event, 'v', 'KeyV')) {
         logger.log('✅ [Terminal] Ctrl+Shift+V paste detected');
         event.preventDefault()
-        ClipboardGetText().then((text) => {
-          if (text) {
-            // Detect if this is multiline content
-            const hasMultipleLines = text.includes('\n') || text.includes('\r')
-            
-            if (hasMultipleLines) {
-              // For multiline paste: use bracketed paste mode
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
-              WriteToTerminal(sessionId, bracketedText).catch((err) => {
-                console.error('Failed to paste to terminal:', err)
-              })
-            } else {
-              // Single line paste: just strip trailing whitespace
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              WriteToTerminal(sessionId, trimmedText).catch((err) => {
-                console.error('Failed to paste to terminal:', err)
-              })
-            }
-          }
+        readClipboardText().then((text) => {
+          return writePastedTextToTerminal(text)
         }).catch((err) => {
           console.error('Failed to get clipboard text:', err)
         })
@@ -471,38 +483,21 @@ const Terminal: React.FC<TerminalProps> = ({
         return false
       }
 
-      // Handle Cmd+V (Mac) / Ctrl+V (other) for paste
-      // For multiline paste, preserve internal newlines but strip trailing ones
+      // Let the browser/xterm native paste event handle the standard paste shortcut.
+      // This preserves UTF-8 clipboard content from external apps on macOS.
       if ((isMac && event.metaKey && isKey(event, 'v', 'KeyV') && !event.ctrlKey) ||
-          (isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey) ||
           (!isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey && !event.shiftKey)) {
-        logger.log('✅ [Terminal] Paste shortcut detected');
+        logger.log('✅ [Terminal] Standard paste shortcut detected, waiting for native paste event');
+        return true
+      }
+
+      // macOS Ctrl+V is not a browser-native paste shortcut, but the app previously
+      // supported it explicitly, so keep that behavior with UTF-8 safe clipboard read.
+      if (isMac && event.ctrlKey && isKey(event, 'v', 'KeyV') && !event.metaKey) {
+        logger.log('✅ [Terminal] Ctrl+V paste detected on macOS');
         event.preventDefault()
-        ClipboardGetText().then((text) => {
-          if (text) {
-            // Detect if this is multiline content
-            const hasMultipleLines = text.includes('\n') || text.includes('\r')
-            
-            if (hasMultipleLines) {
-              // For multiline paste: use bracketed paste mode
-              // This allows shells like zsh to show @zsh (1-5) indicators
-              // Strip only trailing newlines to prevent auto-execution
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              
-              // Send with bracketed paste escape sequences
-              // \x1b[200~ starts bracketed paste, \x1b[201~ ends it
-              const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
-              WriteToTerminal(sessionId, bracketedText).catch((err) => {
-                console.error('Failed to paste to terminal:', err)
-              })
-            } else {
-              // Single line paste: just strip trailing whitespace
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              WriteToTerminal(sessionId, trimmedText).catch((err) => {
-                console.error('Failed to paste to terminal:', err)
-              })
-            }
-          }
+        readClipboardText().then((text) => {
+          return writePastedTextToTerminal(text)
         }).catch((err) => {
           console.error('Failed to get clipboard text:', err)
         })
@@ -541,25 +536,8 @@ const Terminal: React.FC<TerminalProps> = ({
         e.stopPropagation()
 
         try {
-          const text = await ClipboardGetText()
-          if (text) {
-            // Detect if this is multiline content
-            const hasMultipleLines = text.includes('\n') || text.includes('\r')
-            
-            if (hasMultipleLines) {
-              // For multiline paste: use bracketed paste mode
-              // Strip only trailing newlines to prevent auto-execution
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              
-              // Send with bracketed paste escape sequences
-              const bracketedText = '\x1b[200~' + trimmedText + '\x1b[201~'
-              await WriteToTerminal(sessionId, bracketedText)
-            } else {
-              // Single line paste: just strip trailing whitespace
-              const trimmedText = text.replace(/[\r\n]+$/, '')
-              await WriteToTerminal(sessionId, trimmedText)
-            }
-          }
+          const text = await readClipboardText()
+          await writePastedTextToTerminal(text)
         } catch (err) {
           console.error('Failed to paste from clipboard:', err)
         }
@@ -567,7 +545,19 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     const terminalElement = terminalRef.current
+    const handleNativePaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text/plain')
+      if (!text) return
+
+      e.preventDefault()
+      e.stopPropagation()
+      writePastedTextToTerminal(text).catch((err) => {
+        console.error('Failed to paste to terminal:', err)
+      })
+    }
+
     terminalElement.addEventListener('contextmenu', handleContextMenu)
+    terminalElement.addEventListener('paste', handleNativePaste, true)
 
     // Listen to window resize
     window.addEventListener('resize', handleResize)
@@ -586,6 +576,7 @@ const Terminal: React.FC<TerminalProps> = ({
       window.removeEventListener('resize', handleResize)
       resizeObserver.disconnect()
       terminalElement.removeEventListener('contextmenu', handleContextMenu)
+      terminalElement.removeEventListener('paste', handleNativePaste, true)
       cleanupEvents()
       cleanupDisconnect()
       if (xtermRef.current) {
@@ -598,7 +589,7 @@ const Terminal: React.FC<TerminalProps> = ({
       // React StrictMode unmount/remount preserves refs — if we reset it,
       // the guard fails and startSession runs twice, creating duplicate PTYs.
     }
-  }, [sessionId, sessionType, handleResize])
+  }, [sessionId, sessionType, handleResize, readClipboardText, writePastedTextToTerminal])
 
   return (
     <div className="terminal-wrapper">

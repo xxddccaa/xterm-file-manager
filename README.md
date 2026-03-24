@@ -37,6 +37,14 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.42 - Terminal Paste UTF-8 Fix & Collapsible File Panes (2026-03-24)
+
+**Bug Fixes:**
+- **Terminal paste garbled from external apps**: Fixed Chinese/UTF-8 clipboard text becoming mojibake when pasted into terminal from other apps. Standard paste now prefers the browser/native clipboard paste path, with API fallback for right-click paste and `Ctrl+Shift+V`.
+
+**Improvements:**
+- **Collapsible file panes in terminal view**: Remote terminal layout now lets users collapse the remote and local file panels to reclaim more horizontal space for the command line. Local terminal view also supports collapsing the local file panel.
+
 ### v2.41 - Editor Visibility Fix (2026-02-28)
 
 **Bug Fixes:**
