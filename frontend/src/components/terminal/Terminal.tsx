@@ -12,7 +12,6 @@ import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { WriteToTerminal, StartTerminalSession, StartLocalTerminalSession, ResizeTerminal } from '../../../wailsjs/go/app/App'
 import { ClipboardGetText, ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import logger from '../../utils/logger'
-import { escapeShellPaths } from '../../utils/shellEscape'
 import './Terminal.css'
 
 interface TerminalProps {
@@ -129,6 +128,63 @@ const Terminal: React.FC<TerminalProps> = ({
     return ClipboardGetText()
   }, [])
 
+  const writeClipboardText = useCallback(async (text: string) => {
+    if (!text) return false
+
+    try {
+      const success = await ClipboardSetText(text)
+      if (success) {
+        return true
+      }
+    } catch (err) {
+      logger.log('⚠️ [Terminal] ClipboardSetText failed, falling back to navigator.clipboard.writeText')
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text)
+        return true
+      } catch (err) {
+        logger.log('❌ [Terminal] navigator.clipboard.writeText() failed:', err)
+      }
+    }
+
+    return false
+  }, [])
+
+  const decodeOsc52Text = useCallback((data: string) => {
+    const separatorIndex = data.indexOf(';')
+    if (separatorIndex === -1) {
+      return null
+    }
+
+    const clipboardPayload = data.slice(separatorIndex + 1).replace(/\s+/g, '')
+    if (!clipboardPayload || clipboardPayload === '?') {
+      return null
+    }
+
+    const padding = clipboardPayload.length % 4
+    const paddedPayload = padding === 0
+      ? clipboardPayload
+      : clipboardPayload.padEnd(clipboardPayload.length + (4 - padding), '=')
+
+    try {
+      const binary = atob(paddedPayload)
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+
+      // Guard against unexpectedly large clipboard writes from terminal apps.
+      if (bytes.length > 1024 * 1024) {
+        logger.log('⚠️ [Terminal] OSC 52 payload too large, ignoring clipboard write')
+        return null
+      }
+
+      return new TextDecoder('utf-8').decode(bytes)
+    } catch (err) {
+      logger.log('❌ [Terminal] Failed to decode OSC 52 clipboard payload:', err)
+      return null
+    }
+  }, [])
+
   // Debounced resize handler to avoid rapid-fire resize calls
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleResize = useCallback(() => {
@@ -230,7 +286,7 @@ const Terminal: React.FC<TerminalProps> = ({
     term.unicode.activeVersion = '11'
 
     // 3. Web Links addon: clickable URLs in terminal output
-    const webLinksAddon = new WebLinksAddon((event, uri) => {
+    const webLinksAddon = new WebLinksAddon((_event, uri) => {
       // Open URL in default browser
       window.open(uri, '_blank')
     })
@@ -253,6 +309,29 @@ const Terminal: React.FC<TerminalProps> = ({
 
     // Open terminal in DOM
     term.open(terminalRef.current)
+
+    const oscHandlerDisposables: Array<{ dispose: () => void }> = []
+
+    // Support OSC 52 clipboard writes from terminal apps like opencode, tmux,
+    // neovim plugins, etc. Without this, apps may report "Copied to clipboard"
+    // but the host application never forwards the text to the system clipboard.
+    oscHandlerDisposables.push(term.parser.registerOscHandler(52, (data: string) => {
+      const clipboardText = decodeOsc52Text(data)
+      if (!clipboardText) {
+        logger.log('⚠️ [Terminal] Ignoring empty/unsupported OSC 52 clipboard request')
+        return true
+      }
+
+      void writeClipboardText(clipboardText).then((success) => {
+        if (success) {
+          logger.log('✅ [Terminal] OSC 52 clipboard write succeeded')
+        } else {
+          logger.log('❌ [Terminal] OSC 52 clipboard write failed')
+        }
+      })
+
+      return true
+    }))
 
     // 6. GPU-accelerated renderer: try WebGL first, fallback to Canvas
     try {
@@ -400,7 +479,7 @@ const Terminal: React.FC<TerminalProps> = ({
         if (selection) {
           logger.log('✅ [Terminal] Cmd+C detected, copying selection');
           event.preventDefault()
-          ClipboardSetText(selection).catch((err) => {
+          writeClipboardText(selection).catch((err) => {
             logger.log('❌ [Terminal] Failed to copy:', err);
           })
           return false
@@ -430,7 +509,7 @@ const Terminal: React.FC<TerminalProps> = ({
         if (selection) {
           logger.log('✅ [Terminal] Ctrl+Shift+C detected, copying selection');
           event.preventDefault()
-          ClipboardSetText(selection).catch((err) => {
+          writeClipboardText(selection).catch((err) => {
             logger.log('❌ [Terminal] Failed to copy:', err);
           })
           return false
@@ -459,7 +538,7 @@ const Terminal: React.FC<TerminalProps> = ({
           // Has selection: Copy to clipboard (works on all platforms)
           logger.log('📋 [Terminal] Copying to clipboard');
           event.preventDefault()
-          ClipboardSetText(selection).catch((err) => {
+          writeClipboardText(selection).catch((err) => {
             logger.log('❌ [Terminal] Failed to copy:', err);
           })
           return false
@@ -520,7 +599,7 @@ const Terminal: React.FC<TerminalProps> = ({
       if (enableSelectToCopyRef.current) {
         const selection = term.getSelection()
         if (selection) {
-          ClipboardSetText(selection).catch((err) => {
+          writeClipboardText(selection).catch((err) => {
             console.error('Failed to copy to clipboard:', err)
           })
         }
@@ -577,6 +656,7 @@ const Terminal: React.FC<TerminalProps> = ({
       resizeObserver.disconnect()
       terminalElement.removeEventListener('contextmenu', handleContextMenu)
       terminalElement.removeEventListener('paste', handleNativePaste, true)
+      oscHandlerDisposables.forEach((disposable) => disposable.dispose())
       cleanupEvents()
       cleanupDisconnect()
       if (xtermRef.current) {
@@ -589,7 +669,7 @@ const Terminal: React.FC<TerminalProps> = ({
       // React StrictMode unmount/remount preserves refs — if we reset it,
       // the guard fails and startSession runs twice, creating duplicate PTYs.
     }
-  }, [sessionId, sessionType, handleResize, readClipboardText, writePastedTextToTerminal])
+  }, [sessionId, sessionType, decodeOsc52Text, handleResize, readClipboardText, writeClipboardText, writePastedTextToTerminal])
 
   return (
     <div className="terminal-wrapper">

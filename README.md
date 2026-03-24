@@ -37,6 +37,11 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.43 - Terminal OSC 52 Clipboard Support (2026-03-24)
+
+**Bug Fixes:**
+- **Interactive terminal apps could not copy to system clipboard**: Added OSC 52 clipboard handling so TUI apps like `opencode` can copy text through the host terminal, instead of only showing "Copied to clipboard" inside the app while leaving the real system clipboard unchanged.
+
 ### v2.42 - Terminal Paste UTF-8 Fix & Collapsible File Panes (2026-03-24)
 
 **Bug Fixes:**
