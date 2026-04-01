@@ -9,9 +9,15 @@ export function CheckRemoteSyncDeps(arg1:string):Promise<app.RemoteDepsStatus>;
 
 export function ClearDebugLog():Promise<void>;
 
+export function ClearSSHPasswordCache():Promise<void>;
+
 export function CloseTerminalSession(arg1:string):Promise<void>;
 
 export function ConnectSSH(arg1:app.SSHConfigEntry):Promise<string>;
+
+export function ConnectSSHWithAuth(arg1:app.SSHConfigEntry,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
+
+export function ConnectSSHWithPassword(arg1:app.SSHConfigEntry,arg2:string):Promise<string>;
 
 export function CopyFilesToSystemClipboard(arg1:Array<string>):Promise<void>;
 

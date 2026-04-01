@@ -14,12 +14,24 @@ export function ClearDebugLog() {
   return window['go']['app']['App']['ClearDebugLog']();
 }
 
+export function ClearSSHPasswordCache() {
+  return window['go']['app']['App']['ClearSSHPasswordCache']();
+}
+
 export function CloseTerminalSession(arg1) {
   return window['go']['app']['App']['CloseTerminalSession'](arg1);
 }
 
 export function ConnectSSH(arg1) {
   return window['go']['app']['App']['ConnectSSH'](arg1);
+}
+
+export function ConnectSSHWithAuth(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['App']['ConnectSSHWithAuth'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function ConnectSSHWithPassword(arg1, arg2) {
+  return window['go']['app']['App']['ConnectSSHWithPassword'](arg1, arg2);
 }
 
 export function CopyFilesToSystemClipboard(arg1) {

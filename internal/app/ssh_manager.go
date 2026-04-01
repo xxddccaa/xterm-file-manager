@@ -1,9 +1,9 @@
 package app
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -15,17 +15,21 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // SSHSession represents an active SSH session
 type SSHSession struct {
-	ID         string
-	Config     SSHConfigEntry
-	Client     *ssh.Client
-	Connected  bool
-	ConnectAt  time.Time
-	LastActive time.Time
-	mu         sync.RWMutex
+	ID             string
+	Config         SSHConfigEntry
+	ResolvedConfig *ResolvedSSHConfig
+	Client         *ssh.Client
+	ProxyClients   []*ssh.Client
+	AgentHandle    *sshAgentHandle
+	Connected      bool
+	ConnectAt      time.Time
+	LastActive     time.Time
+	mu             sync.RWMutex
 }
 
 // SSHManager manages all SSH connections
@@ -38,6 +42,11 @@ var sshManager = &SSHManager{
 	sessions: make(map[string]*SSHSession),
 }
 
+const (
+	SSHPasswordRequiredPrefix = "SSH_PASSWORD_REQUIRED:"
+	SSHPasswordInvalidPrefix  = "SSH_PASSWORD_INVALID:"
+)
+
 // FileInfo represents file/directory information
 type FileInfo struct {
 	Name    string `json:"name"`
@@ -47,113 +56,83 @@ type FileInfo struct {
 	IsDir   bool   `json:"isDir"`
 }
 
-// knownHostsCallback returns an ssh.HostKeyCallback that implements TOFU
-// (Trust On First Use) - same behavior as OpenSSH:
-// - If host exists in ~/.ssh/known_hosts, verify the key matches
-// - If host is new, accept the key and append it to known_hosts
 func knownHostsCallback() ssh.HostKeyCallback {
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		usr, err := user.Current()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("⚠️ Failed to resolve home directory for known_hosts: %v", err)
+		return func(string, net.Addr, ssh.PublicKey) error { return nil }
+	}
+	return knownHostsCallbackWithPaths([]string{filepath.Join(homeDir, ".ssh", "known_hosts")})
+}
+
+func knownHostsCallbackWithPaths(paths []string) ssh.HostKeyCallback {
+	cleanPaths := make([]string, 0, len(paths))
+	existingPaths := make([]string, 0, len(paths))
+	for _, path := range uniqueStrings(paths) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		cleanPaths = append(cleanPaths, path)
+		if _, err := os.Stat(path); err == nil {
+			existingPaths = append(existingPaths, path)
+		} else if !os.IsNotExist(err) {
+			log.Printf("⚠️ Failed to inspect known_hosts file %s: %v", path, err)
+		}
+	}
+
+	var baseCallback ssh.HostKeyCallback
+	if len(existingPaths) > 0 {
+		callback, err := knownhosts.New(existingPaths...)
 		if err != nil {
-			// Cannot determine home dir, fall back to trust
-			log.Printf("Warning: cannot get current user for known_hosts check: %v", err)
-			return nil
+			log.Printf("⚠️ Failed to parse known_hosts files %v: %v", existingPaths, err)
+		} else {
+			baseCallback = callback
+		}
+	}
+
+	targetPath := ""
+	if len(cleanPaths) > 0 {
+		targetPath = cleanPaths[0]
+	}
+
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		hostLabel := hostname
+		if host, _, err := net.SplitHostPort(hostname); err == nil && host != "" {
+			hostLabel = host
 		}
 
-		knownHostsPath := filepath.Join(usr.HomeDir, ".ssh", "known_hosts")
-
-		// Normalize hostname (strip port if it's default 22)
-		host, port, _ := net.SplitHostPort(hostname)
-		if host == "" {
-			host = hostname
-		}
-
-		// Build the host key fingerprint for logging
 		fingerprint := sha256.Sum256(key.Marshal())
 		fpStr := base64.StdEncoding.EncodeToString(fingerprint[:])
 
-		// Try to find existing entry in known_hosts
-		found, mismatch := checkKnownHost(knownHostsPath, host, port, key)
-
-		if mismatch {
-			return fmt.Errorf("host key mismatch for %s (fingerprint SHA256:%s). "+
-				"This may indicate a man-in-the-middle attack. "+
-				"Remove the old entry from %s to proceed", host, fpStr, knownHostsPath)
+		if baseCallback != nil {
+			if err := baseCallback(hostname, remote, key); err != nil {
+				var keyErr *knownhosts.KeyError
+				if errors.As(err, &keyErr) {
+					if len(keyErr.Want) > 0 {
+						return fmt.Errorf("host key mismatch for %s (fingerprint SHA256:%s). Remove the old entry from %s to proceed", hostLabel, fpStr, strings.Join(existingPaths, ", "))
+					}
+				} else {
+					return err
+				}
+			} else {
+				return nil
+			}
 		}
 
-		if found {
-			// Key matches known_hosts entry
+		if targetPath == "" {
 			return nil
 		}
 
-		// TOFU: host not in known_hosts, accept and record
-		log.Printf("New host key for %s (SHA256:%s), adding to known_hosts", host, fpStr)
-		if err := appendKnownHost(knownHostsPath, host, port, key); err != nil {
-			log.Printf("Warning: failed to write known_hosts: %v", err)
-			// Still allow connection even if we can't write known_hosts
+		log.Printf("🔐 New host key for %s (SHA256:%s)", hostLabel, fpStr)
+		if err := appendKnownHost(targetPath, hostname, key); err != nil {
+			log.Printf("⚠️ Failed to append known_hosts entry for %s: %v", hostLabel, err)
 		}
 		return nil
 	}
 }
 
-// checkKnownHost checks if a host key exists in known_hosts.
-// Returns (found, mismatch): found=true if host exists with matching key,
-// mismatch=true if host exists but key differs.
-func checkKnownHost(knownHostsPath, host, port string, key ssh.PublicKey) (found bool, mismatch bool) {
-	f, err := os.Open(knownHostsPath)
-	if err != nil {
-		return false, false // File doesn't exist or can't open
-	}
-	defer f.Close()
-
-	keyType := key.Type()
-	keyData := base64.StdEncoding.EncodeToString(key.Marshal())
-
-	// Build possible host patterns to match
-	hostPatterns := []string{host}
-	if port != "" && port != "22" {
-		hostPatterns = append(hostPatterns, fmt.Sprintf("[%s]:%s", host, port))
-	}
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-
-		lineHosts := strings.Split(fields[0], ",")
-		lineKeyType := fields[1]
-		lineKeyData := fields[2]
-
-		// Check if any of our host patterns match this line
-		for _, pattern := range hostPatterns {
-			for _, lh := range lineHosts {
-				if strings.TrimSpace(lh) == pattern {
-					// Host found - check if key matches
-					if lineKeyType == keyType && lineKeyData == keyData {
-						return true, false // Exact match
-					}
-					if lineKeyType == keyType {
-						return false, true // Same type, different key = mismatch
-					}
-					// Different key type, continue searching
-				}
-			}
-		}
-	}
-
-	return false, false
-}
-
-// appendKnownHost appends a new host key entry to known_hosts file
-func appendKnownHost(knownHostsPath, host, port string, key ssh.PublicKey) error {
-	// Ensure .ssh directory exists
+func appendKnownHost(knownHostsPath, hostname string, key ssh.PublicKey) error {
 	dir := filepath.Dir(knownHostsPath)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
@@ -165,89 +144,140 @@ func appendKnownHost(knownHostsPath, host, port string, key ssh.PublicKey) error
 	}
 	defer f.Close()
 
-	// Format: hostname key-type base64-key
-	hostEntry := host
-	if port != "" && port != "22" {
-		hostEntry = fmt.Sprintf("[%s]:%s", host, port)
-	}
-
-	keyData := base64.StdEncoding.EncodeToString(key.Marshal())
-	line := fmt.Sprintf("%s %s %s\n", hostEntry, key.Type(), keyData)
-
-	_, err = f.WriteString(line)
+	line := knownhosts.Line([]string{knownhosts.Normalize(hostname)}, key)
+	_, err = f.WriteString(line + "\n")
 	return err
 }
 
 // ConnectSSH establishes SSH connection
 func (a *App) ConnectSSH(config SSHConfigEntry) (string, error) {
-	sessionID := fmt.Sprintf("%s-%d", config.Host, time.Now().Unix())
+	return a.connectSSH(config, sshPromptInputs{})
+}
 
-	// Build SSH client config with known_hosts verification (TOFU strategy)
-	sshConfig := &ssh.ClientConfig{
-		User:            config.User,
-		HostKeyCallback: knownHostsCallback(),
-		Timeout:         SSHConnectTimeout * time.Second,
+// ConnectSSHWithPassword establishes SSH connection with an explicit password.
+func (a *App) ConnectSSHWithPassword(config SSHConfigEntry, password string) (string, error) {
+	return a.connectSSH(config, sshPromptInputs{
+		Password:     password,
+		PasswordHost: config.Host,
+	})
+}
+
+// ConnectSSHWithAuth retries an SSH connection with a prompt-provided secret.
+func (a *App) ConnectSSHWithAuth(config SSHConfigEntry, password string, passwordHost string, keyPassphrase string, keyIdentityFile string) (string, error) {
+	return a.connectSSH(config, sshPromptInputs{
+		Password:        password,
+		PasswordHost:    passwordHost,
+		KeyPassphrase:   keyPassphrase,
+		KeyIdentityFile: keyIdentityFile,
+	})
+}
+
+// ClearSSHPasswordCache removes cached SSH passwords and key passphrases.
+func (a *App) ClearSSHPasswordCache() error {
+	return clearSSHPasswordCache()
+}
+
+func applyResolvedConfigFallbacks(config SSHConfigEntry, resolved *ResolvedSSHConfig) {
+	if resolved.Alias == "" {
+		resolved.Alias = config.Host
+	}
+	if resolved.Hostname == "" {
+		if config.Hostname != "" {
+			resolved.Hostname = config.Hostname
+		} else {
+			resolved.Hostname = resolved.Alias
+		}
+	}
+	if resolved.User == "" {
+		if config.User != "" {
+			resolved.User = config.User
+		} else if currentUser, err := user.Current(); err == nil {
+			resolved.User = currentUser.Username
+		}
+	}
+	if resolved.Port == 0 {
+		if config.Port > 0 {
+			resolved.Port = config.Port
+		} else {
+			resolved.Port = 22
+		}
+	}
+	if len(resolved.IdentityFiles) == 0 && config.IdentityFile != "" {
+		resolved.IdentityFiles = []string{config.IdentityFile}
+	}
+}
+
+func cachePromptPasswordOnSuccess(prompt sshPromptInputs) {
+	if prompt.Password == "" || strings.TrimSpace(prompt.PasswordHost) == "" {
+		return
 	}
 
-	// Handle authentication
-	if config.IdentityFile != "" {
-		// Expand ~ to home directory
-		identityFile := config.IdentityFile
-		if strings.HasPrefix(identityFile, "~/") {
-			usr, err := user.Current()
-			if err == nil {
-				identityFile = filepath.Join(usr.HomeDir, identityFile[2:])
-			}
-		}
-
-		// Read private key
-		key, err := os.ReadFile(identityFile)
-		if err != nil {
-			return "", fmt.Errorf("failed to read private key: %v", err)
-		}
-
-		// Parse private key
-		signer, err := ssh.ParsePrivateKey(key)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse private key: %v", err)
-		}
-
-		sshConfig.Auth = []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		}
-	} else {
-		return "", fmt.Errorf("no authentication method configured")
+	entry := SSHConfigEntry{
+		Host:     prompt.PasswordHost,
+		Hostname: prompt.PasswordHost,
+		Port:     22,
 	}
 
-	// Determine hostname
-	hostname := config.Hostname
-	if hostname == "" {
-		hostname = config.Host
+	if resolved, err := resolveSSHConfig(prompt.PasswordHost); err == nil {
+		applyResolvedConfigFallbacks(entry, resolved)
+		entry = sshConfigEntryFromResolved(resolved)
 	}
 
-	// Connect to SSH server
-	addr := fmt.Sprintf("%s:%d", hostname, config.Port)
-	client, err := ssh.Dial("tcp", addr, sshConfig)
+	if err := cacheSSHPassword(entry, prompt.Password); err != nil {
+		log.Printf("⚠️ Failed to cache SSH password for %s: %v", entry.Host, err)
+	}
+}
+
+func (a *App) connectSSH(config SSHConfigEntry, prompt sshPromptInputs) (string, error) {
+	resolved, err := resolveSSHConfig(config.Host)
 	if err != nil {
-		return "", fmt.Errorf("failed to connect to %s: %v", addr, err)
+		return "", err
+	}
+	applyResolvedConfigFallbacks(config, resolved)
+
+	sessionID := fmt.Sprintf("%s-%d", resolved.Alias, time.Now().UnixNano())
+	client, proxyClients, agentHandle, err := connectResolvedSSHChain(resolved, prompt, nil, resolved.ForwardAgent)
+	if err != nil {
+		return "", err
 	}
 
-	// Create session object
+	if prompt.Password != "" {
+		cachePromptPasswordOnSuccess(prompt)
+	}
+
+	storedConfig := sshConfigEntryFromResolved(resolved)
+	if config.ID != "" {
+		storedConfig.ID = config.ID
+	}
+
 	session := &SSHSession{
-		ID:         sessionID,
-		Config:     config,
-		Client:     client,
-		Connected:  true,
-		ConnectAt:  time.Now(),
-		LastActive: time.Now(),
+		ID:             sessionID,
+		Config:         storedConfig,
+		ResolvedConfig: resolved,
+		Client:         client,
+		ProxyClients:   proxyClients,
+		AgentHandle:    agentHandle,
+		Connected:      true,
+		ConnectAt:      time.Now(),
+		LastActive:     time.Now(),
 	}
 
-	// Store session
 	sshManager.mu.Lock()
 	sshManager.sessions[sessionID] = session
 	sshManager.mu.Unlock()
 
 	return sessionID, nil
+}
+
+func isSSHAuthenticationError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "unable to authenticate") ||
+		strings.Contains(errMsg, "no supported methods remain") ||
+		strings.Contains(errMsg, "permission denied")
 }
 
 // DisconnectSSH closes an SSH connection
@@ -264,7 +294,11 @@ func (a *App) DisconnectSSH(sessionID string) error {
 	}
 
 	if session.Client != nil {
-		session.Client.Close()
+		_ = session.Client.Close()
+	}
+	closeSSHClients(session.ProxyClients)
+	if session.AgentHandle != nil {
+		_ = session.AgentHandle.Close()
 	}
 
 	session.Connected = false

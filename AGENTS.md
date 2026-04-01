@@ -348,6 +348,11 @@ logger.log('❌ [Terminal] Failed to copy:', err)
     - **Remote files**: Two-step: download to temp dir via SFTP, then clipboard write via `CopyRemoteFilesToSystemClipboard(sessionID, remotePaths)`
     - **Temp cleanup**: Temp directories tracked in `tempDirs` slice, cleaned on app shutdown via `CleanupTempDirs()` called from `OnShutdown` in `main.go`
     - **Distinction from in-app clipboard**: `SetFileClipboard`/`PasteFiles` is the app-internal clipboard (memory-only, for Copy/Cut/Paste within the app). `CopyFilesToSystemClipboard` writes to the OS pasteboard for cross-app sharing.
+15. **SSH Auth Prompt Flow**: Password retry and encrypted private-key retry now share the same frontend/backend path. Frontend should use `ConnectSSHWithAuth(config, password, passwordHost, keyPassphrase, keyIdentityFile)` for prompt retries and parse machine-readable error prefixes:
+    - `SSH_PASSWORD_REQUIRED:` / `SSH_PASSWORD_INVALID:`
+    - `SSH_KEY_PASSPHRASE_REQUIRED:` / `SSH_KEY_PASSPHRASE_INVALID:`
+    - On macOS, cached SSH passwords and key passphrases live in **Keychain** (`ssh_secret_store_darwin.go`), not in plaintext app settings.
+16. **Resolved SSH Config + Agent Forwarding**: SSH connections must be built from resolved OpenSSH config (`ssh_config_resolver.go`), not from the shallow `SSHConfigEntry` alone. Terminal sessions should enable agent forwarding only when `session.ResolvedConfig.ForwardAgent` is true and `session.AgentHandle` exists, using `agent.ForwardToAgent()` before `agent.RequestAgentForwarding()`.
 
 ## Common Patterns
 

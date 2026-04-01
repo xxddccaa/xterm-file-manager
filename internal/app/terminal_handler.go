@@ -10,6 +10,7 @@ import (
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 // TerminalMessage represents a message sent over WebSocket
@@ -64,6 +65,16 @@ func (a *App) StartTerminalSession(sessionID string, rows int, cols int) error {
 	sshSession, err := session.Client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create SSH session: %v", err)
+	}
+
+	if session.ResolvedConfig != nil && session.ResolvedConfig.ForwardAgent && session.AgentHandle != nil && session.AgentHandle.Client != nil {
+		if err := agent.ForwardToAgent(session.Client, session.AgentHandle.Client); err != nil {
+			log.Printf("⚠️ Failed to enable agent forwarding handler for %s: %v", sessionID, err)
+		} else if err := agent.RequestAgentForwarding(sshSession); err != nil {
+			log.Printf("⚠️ Failed to request agent forwarding for %s: %v", sessionID, err)
+		} else {
+			log.Printf("✅ [Terminal] Enabled agent forwarding for %s", sessionID)
+		}
 	}
 
 	// Set up terminal modes

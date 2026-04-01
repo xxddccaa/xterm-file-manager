@@ -48,8 +48,11 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 		}
 	}
 
-	// Create command
-	cmd := exec.Command(shell)
+	// Create command as login shell (-l) so that shell profile files
+	// (~/.zprofile, ~/.bash_profile, /etc/profile) are sourced.
+	// This ensures PATH includes user-installed tools (e.g. Homebrew, Go binaries)
+	// even when the app is launched from Finder/Dock (which has a minimal environment).
+	cmd := exec.Command(shell, "-l")
 
 	// Set initial working directory if provided and valid
 	if initialDir != "" {

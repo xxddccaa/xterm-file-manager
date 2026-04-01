@@ -37,6 +37,18 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.44 - SSH Auth Overhaul & Terminal UX Fixes (2026-04-01)
+
+**New Features:**
+- **Full OpenSSH config support on macOS**: SSH connections now resolve effective config through user + system OpenSSH config, including recursive `Include`, `IdentityFile`, `IdentityAgent`, `ProxyJump`, `ProxyCommand`, `UserKnownHostsFile`, `ForwardAgent`, `UseKeychain`, `AddKeysToAgent`, `IdentitiesOnly`, `PasswordAuthentication`, and timeout-related options.
+- **macOS Keychain-backed SSH auth cache**: Server passwords and encrypted private-key passphrases are cached in Keychain on macOS, with a single "Clear Auth Cache" action to remove stored SSH credentials.
+- **ssh-agent + private key passphrase flow**: Added `ssh-agent` signer support, encrypted private-key passphrase prompts, automatic retry after invalid cached passphrases, and agent forwarding for interactive terminal sessions when `ForwardAgent yes` is configured.
+
+**Bug Fixes:**
+- **Password-only SSH hosts now connect correctly**: Hosts without `IdentityFile` now prompt for password and can reconnect with cached credentials, matching common OpenSSH/MobaXterm workflows.
+- **Terminal link opening and text copy on macOS**: Ctrl+left-click now opens hovered URLs in terminal output, and selected text can be copied reliably through native copy handling.
+- **Server sidebar scroll**: The left server list now scrolls correctly, so long SSH config lists remain fully reachable and clickable.
+
 ### v2.43 - Terminal OSC 52 Clipboard Support (2026-03-24)
 
 **Bug Fixes:**

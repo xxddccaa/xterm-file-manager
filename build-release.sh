@@ -62,6 +62,13 @@ build_platform() {
     local platform=$1
     local output_name=$2
     local build_platform=$3
+
+    if [[ "$platform" == "Linux" ]] && [[ "$(uname -s)" == "Darwin" ]]; then
+        echo -e "${YELLOW}[3/5] ⚠️ 跳过 ${platform}...${NC}"
+        echo -e "  Wails 无法在 macOS 上交叉编译 Linux 版本，请在 Linux 环境中执行 ./build-release.sh linux"
+        echo ""
+        return 0
+    fi
     
     echo -e "${YELLOW}[3/5] 🔨 编译 ${platform}...${NC}"
     wails build -platform "$build_platform" -clean
@@ -73,9 +80,16 @@ build_platform() {
     
     echo -e "${GREEN}✓ ${platform} 编译成功${NC}"
     echo ""
+
+    if [[ "$platform" == "macOS"* ]] && [[ "$(uname -s)" == "Darwin" ]] && [ -f "scripts/post-build-sign.sh" ]; then
+        echo -e "${YELLOW}[3/5] 🔐 重新签名 macOS 应用...${NC}"
+        ./scripts/post-build-sign.sh
+        echo ""
+    fi
     
     # 移动到 releases 目录
     echo -e "${YELLOW}[4/5] 📦 打包到 releases...${NC}"
+    rm -f "$RELEASE_DIR/${output_name}.zip" "$RELEASE_DIR/${output_name}.exe" "$RELEASE_DIR/${output_name}.tar.gz"
     
     if [[ "$platform" == "macOS"* ]]; then
         # macOS 应用打包成 zip

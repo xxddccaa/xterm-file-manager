@@ -8,7 +8,7 @@ import { CanvasAddon } from '@xterm/addon-canvas'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ImageAddon, IImageAddonOptions } from '@xterm/addon-image'
 import '@xterm/xterm/css/xterm.css'
-import { EventsOn } from '../../../wailsjs/runtime/runtime'
+import { BrowserOpenURL, EventsOn } from '../../../wailsjs/runtime/runtime'
 import { WriteToTerminal, StartTerminalSession, StartLocalTerminalSession, ResizeTerminal } from '../../../wailsjs/go/app/App'
 import { ClipboardGetText, ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import logger from '../../utils/logger'
@@ -44,6 +44,7 @@ const Terminal: React.FC<TerminalProps> = ({
   // Use refs for settings so event handlers always see the latest values
   const enableSelectToCopyRef = useRef(enableSelectToCopy)
   const enableRightClickPasteRef = useRef(enableRightClickPaste)
+  const hoveredLinkUriRef = useRef<string | null>(null)
 
   // Search bar state
   const [searchVisible, setSearchVisible] = useState(false)
@@ -150,6 +151,32 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     return false
+  }, [])
+
+  const copyTextToClipboard = useCallback(async (text: string, copyEvent?: ClipboardEvent) => {
+    if (!text) return false
+
+    let copiedViaNativeEvent = false
+    if (copyEvent?.clipboardData) {
+      copyEvent.clipboardData.setData('text/plain', text)
+      copyEvent.preventDefault()
+      copyEvent.stopPropagation()
+      copiedViaNativeEvent = true
+    }
+
+    const copiedViaApi = await writeClipboardText(text)
+    return copiedViaNativeEvent || copiedViaApi
+  }, [writeClipboardText])
+
+  const openTerminalLink = useCallback((uri: string) => {
+    if (!uri) return
+
+    try {
+      BrowserOpenURL(uri)
+    } catch (err) {
+      logger.log('⚠️ [Terminal] BrowserOpenURL failed, falling back to window.open:', err)
+      window.open(uri, '_blank', 'noopener,noreferrer')
+    }
   }, [])
 
   const decodeOsc52Text = useCallback((data: string) => {
@@ -287,8 +314,14 @@ const Terminal: React.FC<TerminalProps> = ({
 
     // 3. Web Links addon: clickable URLs in terminal output
     const webLinksAddon = new WebLinksAddon((_event, uri) => {
-      // Open URL in default browser
-      window.open(uri, '_blank')
+      openTerminalLink(uri)
+    }, {
+      hover: (_event, uri) => {
+        hoveredLinkUriRef.current = uri
+      },
+      leave: () => {
+        hoveredLinkUriRef.current = null
+      },
     })
     term.loadAddon(webLinksAddon)
 
@@ -479,7 +512,7 @@ const Terminal: React.FC<TerminalProps> = ({
         if (selection) {
           logger.log('✅ [Terminal] Cmd+C detected, copying selection');
           event.preventDefault()
-          writeClipboardText(selection).catch((err) => {
+          copyTextToClipboard(selection).catch((err) => {
             logger.log('❌ [Terminal] Failed to copy:', err);
           })
           return false
@@ -509,7 +542,7 @@ const Terminal: React.FC<TerminalProps> = ({
         if (selection) {
           logger.log('✅ [Terminal] Ctrl+Shift+C detected, copying selection');
           event.preventDefault()
-          writeClipboardText(selection).catch((err) => {
+          copyTextToClipboard(selection).catch((err) => {
             logger.log('❌ [Terminal] Failed to copy:', err);
           })
           return false
@@ -538,7 +571,7 @@ const Terminal: React.FC<TerminalProps> = ({
           // Has selection: Copy to clipboard (works on all platforms)
           logger.log('📋 [Terminal] Copying to clipboard');
           event.preventDefault()
-          writeClipboardText(selection).catch((err) => {
+          copyTextToClipboard(selection).catch((err) => {
             logger.log('❌ [Terminal] Failed to copy:', err);
           })
           return false
@@ -599,7 +632,7 @@ const Terminal: React.FC<TerminalProps> = ({
       if (enableSelectToCopyRef.current) {
         const selection = term.getSelection()
         if (selection) {
-          writeClipboardText(selection).catch((err) => {
+          copyTextToClipboard(selection).catch((err) => {
             console.error('Failed to copy to clipboard:', err)
           })
         }
@@ -610,6 +643,30 @@ const Terminal: React.FC<TerminalProps> = ({
     // Handle right-click for paste (uses ref for latest setting)
     // Mimics macOS Terminal behavior: paste without auto-executing
     const handleContextMenu = async (e: MouseEvent) => {
+      const selection = term.getSelection()
+      if (isMac && e.ctrlKey && hoveredLinkUriRef.current) {
+        e.preventDefault()
+        e.stopPropagation()
+        logger.log('✅ [Terminal] Ctrl+click opening hovered link:', hoveredLinkUriRef.current)
+        openTerminalLink(hoveredLinkUriRef.current)
+        return
+      }
+
+      if (isMac && selection) {
+        e.preventDefault()
+        e.stopPropagation()
+        copyTextToClipboard(selection).then((success) => {
+          if (success) {
+            logger.log('✅ [Terminal] Context menu copied current selection')
+          } else {
+            logger.log('❌ [Terminal] Context menu copy failed')
+          }
+        }).catch((err) => {
+          console.error('Failed to copy terminal selection:', err)
+        })
+        return
+      }
+
       if (enableRightClickPasteRef.current) {
         e.preventDefault()
         e.stopPropagation()
@@ -624,6 +681,15 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     const terminalElement = terminalRef.current
+    const handleNativeCopy = (e: ClipboardEvent) => {
+      const selection = term.getSelection()
+      if (!selection) return
+
+      copyTextToClipboard(selection, e).catch((err) => {
+        console.error('Failed to handle native copy event:', err)
+      })
+    }
+
     const handleNativePaste = (e: ClipboardEvent) => {
       const text = e.clipboardData?.getData('text/plain')
       if (!text) return
@@ -636,6 +702,7 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     terminalElement.addEventListener('contextmenu', handleContextMenu)
+    terminalElement.addEventListener('copy', handleNativeCopy, true)
     terminalElement.addEventListener('paste', handleNativePaste, true)
 
     // Listen to window resize
@@ -655,10 +722,12 @@ const Terminal: React.FC<TerminalProps> = ({
       window.removeEventListener('resize', handleResize)
       resizeObserver.disconnect()
       terminalElement.removeEventListener('contextmenu', handleContextMenu)
+      terminalElement.removeEventListener('copy', handleNativeCopy, true)
       terminalElement.removeEventListener('paste', handleNativePaste, true)
       oscHandlerDisposables.forEach((disposable) => disposable.dispose())
       cleanupEvents()
       cleanupDisconnect()
+      hoveredLinkUriRef.current = null
       if (xtermRef.current) {
         xtermRef.current.dispose()
         xtermRef.current = null
@@ -669,7 +738,7 @@ const Terminal: React.FC<TerminalProps> = ({
       // React StrictMode unmount/remount preserves refs — if we reset it,
       // the guard fails and startSession runs twice, creating duplicate PTYs.
     }
-  }, [sessionId, sessionType, decodeOsc52Text, handleResize, readClipboardText, writeClipboardText, writePastedTextToTerminal])
+  }, [sessionId, sessionType, copyTextToClipboard, decodeOsc52Text, handleResize, openTerminalLink, readClipboardText, writeClipboardText, writePastedTextToTerminal])
 
   return (
     <div className="terminal-wrapper">

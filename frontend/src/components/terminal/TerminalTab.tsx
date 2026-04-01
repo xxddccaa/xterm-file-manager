@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Layout, Input, Button, List, Spin, message } from 'antd'
+import { Layout, Input, Button, List, Spin, Modal, message } from 'antd'
 import { SearchOutlined, PlusOutlined, CloseOutlined, EditOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
-import { ConnectSSH, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal, CloseTerminalSession, OpenEditorWindow, GetHomeDirectory, SaveTerminalSessions, LoadTerminalSessions } from '../../../wailsjs/go/app/App'
+import { ClearSSHPasswordCache, ConnectSSH, ConnectSSHWithAuth, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal, CloseTerminalSession, OpenEditorWindow, GetHomeDirectory, SaveTerminalSessions, LoadTerminalSessions } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import Terminal from './Terminal'
 import FileManager from '../file-manager/FileManager'
@@ -40,7 +40,106 @@ interface TerminalSettings {
   enableRightClickPaste: boolean
 }
 
+type AuthPromptKind = 'password' | 'key_passphrase'
+
+interface AuthPromptState {
+  visible: boolean
+  kind: AuthPromptKind
+  config: SSHConfigEntry | null
+  sessionRefId: string | null
+  removeSessionOnCancel: boolean
+  showSuccessToast: boolean
+  reasonCode: 'missing' | 'cached_invalid'
+  host: string
+  identityFile: string
+  errorMessage: string
+  submitting: boolean
+}
+
+interface ParsedSSHConnectError {
+  kind: 'password_required' | 'password_invalid' | 'key_passphrase_required' | 'key_passphrase_invalid' | 'other'
+  reasonCode?: 'missing' | 'cached_invalid'
+  host?: string
+  identityFile?: string
+  message: string
+}
+
 type CollapsiblePane = 'remote' | 'local'
+
+const SSH_PASSWORD_REQUIRED_PREFIX = 'SSH_PASSWORD_REQUIRED:'
+const SSH_PASSWORD_INVALID_PREFIX = 'SSH_PASSWORD_INVALID:'
+const SSH_KEY_PASSPHRASE_REQUIRED_PREFIX = 'SSH_KEY_PASSPHRASE_REQUIRED:'
+const SSH_KEY_PASSPHRASE_INVALID_PREFIX = 'SSH_KEY_PASSPHRASE_INVALID:'
+
+const parseErrorPayload = (payload: string, expectedParts: number): string[] => {
+  const parts = payload.split('|')
+  if (parts.length <= expectedParts) {
+    return parts
+  }
+
+  const head = parts.slice(0, expectedParts - 1)
+  const tail = parts.slice(expectedParts - 1).join('|')
+  return [...head, tail]
+}
+
+const getErrorMessage = (error: any): string => {
+  if (typeof error === 'string') return error
+  if (error?.message) return error.message
+  return String(error)
+}
+
+const parseSSHConnectError = (error: any): ParsedSSHConnectError => {
+  const rawMessage = getErrorMessage(error)
+
+  if (rawMessage.startsWith(SSH_PASSWORD_REQUIRED_PREFIX)) {
+    const payload = rawMessage.slice(SSH_PASSWORD_REQUIRED_PREFIX.length)
+    const [reasonCode = 'missing', host = '', message = ''] = parseErrorPayload(payload, 3)
+    return {
+      kind: 'password_required',
+      reasonCode: reasonCode === 'cached_invalid' ? 'cached_invalid' : 'missing',
+      host,
+      message: message || rawMessage,
+    }
+  }
+
+  if (rawMessage.startsWith(SSH_PASSWORD_INVALID_PREFIX)) {
+    const payload = rawMessage.slice(SSH_PASSWORD_INVALID_PREFIX.length)
+    const [host = '', message = ''] = parseErrorPayload(payload, 2)
+    return {
+      kind: 'password_invalid',
+      host,
+      message: message || rawMessage,
+    }
+  }
+
+  if (rawMessage.startsWith(SSH_KEY_PASSPHRASE_REQUIRED_PREFIX)) {
+    const payload = rawMessage.slice(SSH_KEY_PASSPHRASE_REQUIRED_PREFIX.length)
+    const [reasonCode = 'missing', identityFile = '', host = '', message = ''] = parseErrorPayload(payload, 4)
+    return {
+      kind: 'key_passphrase_required',
+      reasonCode: reasonCode === 'cached_invalid' ? 'cached_invalid' : 'missing',
+      identityFile,
+      host,
+      message: message || rawMessage,
+    }
+  }
+
+  if (rawMessage.startsWith(SSH_KEY_PASSPHRASE_INVALID_PREFIX)) {
+    const payload = rawMessage.slice(SSH_KEY_PASSPHRASE_INVALID_PREFIX.length)
+    const [identityFile = '', host = '', message = ''] = parseErrorPayload(payload, 3)
+    return {
+      kind: 'key_passphrase_invalid',
+      identityFile,
+      host,
+      message: message || rawMessage,
+    }
+  }
+
+  return {
+    kind: 'other',
+    message: rawMessage,
+  }
+}
 
 const TerminalTab: React.FC = () => {
   const { t } = useTranslation(['terminal', 'common'])
@@ -100,6 +199,20 @@ const TerminalTab: React.FC = () => {
     sessionId: string
     index: number
   }>({ visible: false, x: 0, y: 0, sessionId: '', index: -1 })
+  const [authPrompt, setAuthPrompt] = useState<AuthPromptState>({
+    visible: false,
+    kind: 'password',
+    config: null,
+    sessionRefId: null,
+    removeSessionOnCancel: false,
+    showSuccessToast: false,
+    reasonCode: 'missing',
+    host: '',
+    identityFile: '',
+    errorMessage: '',
+    submitting: false,
+  })
+  const [authInput, setAuthInput] = useState('')
 
   useEffect(() => {
     loadSSHConfig()
@@ -259,6 +372,101 @@ const TerminalTab: React.FC = () => {
     }
   }
 
+  const removeSessionPlaceholder = useCallback((sessionId: string) => {
+    setSessions(prev => {
+      const remaining = prev.filter(s => s.id !== sessionId)
+      setActiveSessionId(current => current === sessionId ? (remaining.length > 0 ? remaining[0].id : null) : current)
+      return remaining
+    })
+  }, [])
+
+  const finalizeSSHConnection = useCallback((sessionRefId: string, sessionId: string, host: string, showSuccessToast: boolean) => {
+    setSessions(prev => prev.map(s =>
+      s.id === sessionRefId
+        ? { ...s, id: sessionId, connected: true, sshHost: host, name: host }
+        : s
+    ))
+    setActiveSessionId(sessionId)
+
+    if (showSuccessToast) {
+      message.success(t('terminal:connectedToHost', { host }))
+    }
+  }, [t])
+
+  const closeAuthPrompt = useCallback(() => {
+    setAuthPrompt({
+      visible: false,
+      kind: 'password',
+      config: null,
+      sessionRefId: null,
+      removeSessionOnCancel: false,
+      showSuccessToast: false,
+      reasonCode: 'missing',
+      host: '',
+      identityFile: '',
+      errorMessage: '',
+      submitting: false,
+    })
+    setAuthInput('')
+  }, [])
+
+  const showAuthPromptForError = useCallback((
+    parsedError: ParsedSSHConnectError,
+    config: SSHConfigEntry,
+    sessionRefId: string,
+    removeSessionOnCancel: boolean,
+    showSuccessToast: boolean,
+  ) => {
+    if (parsedError.kind !== 'password_required' && parsedError.kind !== 'key_passphrase_required') {
+      return
+    }
+
+    const promptKind: AuthPromptKind = parsedError.kind === 'password_required' ? 'password' : 'key_passphrase'
+    const reasonCode = parsedError.reasonCode || 'missing'
+
+    setAuthPrompt({
+      visible: true,
+      kind: promptKind,
+      config,
+      sessionRefId,
+      removeSessionOnCancel,
+      showSuccessToast,
+      reasonCode,
+      host: parsedError.host || config.host,
+      identityFile: parsedError.identityFile || '',
+      errorMessage: reasonCode === 'cached_invalid'
+        ? (
+          promptKind === 'password'
+            ? t('terminal:sshPasswordCachedInvalid')
+            : t('terminal:sshKeyPassphraseCachedInvalid')
+        )
+        : '',
+      submitting: false,
+    })
+    setAuthInput('')
+  }, [t])
+
+  const attemptSSHConnection = useCallback(async (
+    config: SSHConfigEntry,
+    sessionRefId: string,
+    removeSessionOnPromptCancel: boolean,
+    showSuccessToast: boolean,
+  ) => {
+    try {
+      const sessionId = await ConnectSSH(config)
+      finalizeSSHConnection(sessionRefId, sessionId, config.host, showSuccessToast)
+      return true
+    } catch (error: any) {
+      const parsedError = parseSSHConnectError(error)
+      if (parsedError.kind === 'password_required' || parsedError.kind === 'key_passphrase_required') {
+        showAuthPromptForError(parsedError, config, sessionRefId, removeSessionOnPromptCancel, showSuccessToast)
+        return false
+      }
+
+      throw new Error(parsedError.message)
+    }
+  }, [finalizeSSHConnection, showAuthPromptForError])
+
   const connectSessionIfNeeded = useCallback(async (session: Session) => {
     if (session.connected) return
 
@@ -275,16 +483,11 @@ const TerminalTab: React.FC = () => {
           message.error(t('terminal:failedToConnect', { host, error: 'SSH config not found for ' + host }))
           return
         }
-        const sessionId = await ConnectSSH(config)
-        setSessions(prev => prev.map(s =>
-          s.id === session.id
-            ? { ...s, id: sessionId, connected: true, sshHost: host, name: host }
-            : s
-        ))
-        setActiveSessionId(sessionId)
+        await attemptSSHConnection(config, session.id, false, false)
       } catch (error: any) {
         console.error('Failed to connect SSH:', error)
-        message.error(t('terminal:failedToConnect', { host, error: error?.message || error }))
+        const parsedError = parseSSHConnectError(error)
+        message.error(t('terminal:failedToConnect', { host, error: parsedError.message }))
       } finally {
         connectingHostsRef.current.delete(host)
       }
@@ -304,7 +507,7 @@ const TerminalTab: React.FC = () => {
       console.error('Failed to create local terminal:', error)
       message.error(t('terminal:failedToCreateLocalSession'))
     }
-  }, [t, sshConfigs])
+  }, [attemptSSHConnection, t, sshConfigs])
 
   // Connect on tab activation (lazy connect)
   useEffect(() => {
@@ -319,6 +522,9 @@ const TerminalTab: React.FC = () => {
     // Guard: prevent rapid duplicate connections to the same host
     if (connectingHostsRef.current.has(config.host)) {
       console.log(`⚠️ Connection to ${config.host} already in progress, ignoring duplicate click`)
+      return
+    }
+    if (authPrompt.visible && authPrompt.config?.host === config.host) {
       return
     }
     connectingHostsRef.current.add(config.host)
@@ -339,34 +545,104 @@ const TerminalTab: React.FC = () => {
       setActiveSessionId(tempSessionId)
       
       // Try to connect
-      const sessionId = await ConnectSSH(config)
-      
-      // Update session with real ID and connected status
-      setSessions(prev => prev.map(s => 
-        s.id === tempSessionId 
-          ? { ...s, id: sessionId, connected: true }
-          : s
-      ))
-      setActiveSessionId(sessionId)
-      
-      message.success(t('terminal:connectedToHost', { host: config.host }))
+      const connected = await attemptSSHConnection(config, tempSessionId, true, true)
+      if (!connected) {
+        return
+      }
     } catch (error: any) {
       console.error('Failed to create session:', error)
-      message.error(t('terminal:failedToConnect', { host: config.host, error: error?.message || error }))
-      
-      // Remove the failed session after a delay
-      setTimeout(() => {
-        setSessions(prev => prev.filter(s => s.id !== tempSessionId))
-        if (activeSessionId === tempSessionId) {
-          const remaining = sessions.filter(s => s.id !== tempSessionId)
-          setActiveSessionId(remaining.length > 0 ? remaining[0].id : null)
-        }
-      }, 3000)
+      const parsedError = parseSSHConnectError(error)
+      message.error(t('terminal:failedToConnect', { host: config.host, error: parsedError.message }))
+      removeSessionPlaceholder(tempSessionId)
     } finally {
       // Release the guard after connection attempt completes
       connectingHostsRef.current.delete(config.host)
     }
   }
+
+  const handleAuthPromptCancel = useCallback(() => {
+    if (authPrompt.removeSessionOnCancel && authPrompt.sessionRefId) {
+      removeSessionPlaceholder(authPrompt.sessionRefId)
+    }
+    closeAuthPrompt()
+  }, [authPrompt.removeSessionOnCancel, authPrompt.sessionRefId, closeAuthPrompt, removeSessionPlaceholder])
+
+  const handleAuthPromptSubmit = useCallback(async () => {
+    if (!authPrompt.config || !authPrompt.sessionRefId) {
+      return
+    }
+
+    if (!authInput) {
+      setAuthPrompt(prev => ({
+        ...prev,
+        errorMessage: authPrompt.kind === 'password'
+          ? t('terminal:sshPasswordEmpty')
+          : t('terminal:sshKeyPassphraseEmpty'),
+      }))
+      return
+    }
+
+    setAuthPrompt(prev => ({
+      ...prev,
+      submitting: true,
+      errorMessage: '',
+    }))
+
+    try {
+      const sessionId = await ConnectSSHWithAuth(
+        authPrompt.config,
+        authPrompt.kind === 'password' ? authInput : '',
+        authPrompt.kind === 'password' ? authPrompt.host : '',
+        authPrompt.kind === 'key_passphrase' ? authInput : '',
+        authPrompt.kind === 'key_passphrase' ? authPrompt.identityFile : '',
+      )
+      finalizeSSHConnection(authPrompt.sessionRefId, sessionId, authPrompt.config.host, authPrompt.showSuccessToast)
+      closeAuthPrompt()
+    } catch (error: any) {
+      console.error('Failed to continue SSH authentication:', error)
+      const parsedError = parseSSHConnectError(error)
+      if (parsedError.kind === 'password_required' || parsedError.kind === 'key_passphrase_required') {
+        showAuthPromptForError(
+          parsedError,
+          authPrompt.config,
+          authPrompt.sessionRefId,
+          authPrompt.removeSessionOnCancel,
+          authPrompt.showSuccessToast,
+        )
+        return
+      }
+
+      setAuthPrompt(prev => ({
+        ...prev,
+        submitting: false,
+        errorMessage:
+          parsedError.kind === 'password_invalid'
+            ? t('terminal:sshPasswordInvalid')
+            : parsedError.kind === 'key_passphrase_invalid'
+              ? t('terminal:sshKeyPassphraseInvalid')
+              : parsedError.message,
+      }))
+      if (parsedError.kind === 'password_invalid' || parsedError.kind === 'key_passphrase_invalid') {
+        setAuthInput('')
+      }
+      return
+    }
+
+    setAuthPrompt(prev => ({
+      ...prev,
+      submitting: false,
+    }))
+  }, [authInput, authPrompt, closeAuthPrompt, finalizeSSHConnection, showAuthPromptForError, t])
+
+  const handleClearPasswordCache = useCallback(async () => {
+    try {
+      await ClearSSHPasswordCache()
+      message.success(t('terminal:clearedPasswordCache'))
+    } catch (error: any) {
+      console.error('Failed to clear SSH password cache:', error)
+      message.error(t('terminal:clearPasswordCacheFailed', { error: getErrorMessage(error) }))
+    }
+  }, [t])
 
   const handleCreateLocalTerminal = async () => {
     try {
@@ -947,6 +1223,14 @@ const TerminalTab: React.FC = () => {
               >
                 {t('terminal:localTerminal')}
               </Button>
+              <Button
+                danger
+                onClick={handleClearPasswordCache}
+                block
+                className="clear-password-cache-btn"
+              >
+                {t('terminal:clearPasswordCache')}
+              </Button>
             </>
           )}
         </div>
@@ -1309,6 +1593,64 @@ const TerminalTab: React.FC = () => {
             </div>
           </div>
         )}
+        <Modal
+          open={authPrompt.visible}
+          title={
+            authPrompt.kind === 'password'
+              ? t('terminal:sshPasswordPromptTitle', { host: authPrompt.host || authPrompt.config?.host || '' })
+              : t('terminal:sshKeyPassphrasePromptTitle', { host: authPrompt.host || authPrompt.config?.host || '' })
+          }
+          onCancel={authPrompt.submitting ? undefined : handleAuthPromptCancel}
+          maskClosable={!authPrompt.submitting}
+          closable={!authPrompt.submitting}
+          footer={[
+            <Button key="cancel" onClick={handleAuthPromptCancel} disabled={authPrompt.submitting}>
+              {t('common:cancel')}
+            </Button>,
+            <Button key="connect" type="primary" loading={authPrompt.submitting} onClick={handleAuthPromptSubmit}>
+              {authPrompt.kind === 'password'
+                ? t('terminal:connectWithPassword')
+                : t('terminal:unlockPrivateKey')}
+            </Button>,
+          ]}
+        >
+          <p className="ssh-password-hint">
+            {authPrompt.kind === 'password'
+              ? (
+                authPrompt.reasonCode === 'cached_invalid'
+                  ? t('terminal:sshPasswordPromptDescriptionCached', { host: authPrompt.host || authPrompt.config?.host || '' })
+                  : t('terminal:sshPasswordPromptDescription', { host: authPrompt.host || authPrompt.config?.host || '' })
+              )
+              : (
+                authPrompt.reasonCode === 'cached_invalid'
+                  ? t('terminal:sshKeyPassphrasePromptDescriptionCached', {
+                    host: authPrompt.host || authPrompt.config?.host || '',
+                    identity: authPrompt.identityFile.split('/').pop() || authPrompt.identityFile,
+                  })
+                  : t('terminal:sshKeyPassphrasePromptDescription', {
+                    host: authPrompt.host || authPrompt.config?.host || '',
+                    identity: authPrompt.identityFile.split('/').pop() || authPrompt.identityFile,
+                  })
+              )}
+          </p>
+          <Input.Password
+            autoFocus
+            value={authInput}
+            placeholder={
+              authPrompt.kind === 'password'
+                ? t('terminal:sshPasswordPlaceholder')
+                : t('terminal:sshKeyPassphrasePlaceholder')
+            }
+            onChange={(e) => setAuthInput(e.target.value)}
+            onPressEnter={handleAuthPromptSubmit}
+            disabled={authPrompt.submitting}
+          />
+          {authPrompt.errorMessage && (
+            <div className="ssh-password-error">
+              {authPrompt.errorMessage}
+            </div>
+          )}
+        </Modal>
       </Content>
     </Layout>
   )
