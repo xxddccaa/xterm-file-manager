@@ -37,6 +37,16 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.45 - SSH Server Info & macOS Ctrl Shortcut Fixes (2026-04-03)
+
+**New Features:**
+- **SSH server info bar in terminal view**: Connected SSH sessions now show a live status strip with system name, CPU, memory, disk, load, uptime, and network throughput, refreshed periodically from the remote host.
+- **Remote host telemetry backend**: Added a lightweight `GetSSHServerInfo()` backend API that samples common Linux host metrics and computes network RX/TX rates between polls for the active SSH session.
+
+**Bug Fixes:**
+- **macOS Ctrl+letter terminal shortcuts work reliably again**: On WKWebView, hidden textarea key handling could swallow `Ctrl+A`, `Ctrl+E`, `Ctrl+K`, `Ctrl+U`, and similar readline/tmux shortcuts. The terminal now sends the correct ASCII control bytes directly when needed.
+- **Server info polling respects connection state**: SSH-only polling now stops cleanly when a session disconnects, preventing noisy "session not found/not connected" failures in the terminal UI.
+
 ### v2.44 - SSH Auth Overhaul & Terminal UX Fixes (2026-04-01)
 
 **New Features:**

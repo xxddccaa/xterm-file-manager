@@ -20,16 +20,17 @@ import (
 
 // SSHSession represents an active SSH session
 type SSHSession struct {
-	ID             string
-	Config         SSHConfigEntry
-	ResolvedConfig *ResolvedSSHConfig
-	Client         *ssh.Client
-	ProxyClients   []*ssh.Client
-	AgentHandle    *sshAgentHandle
-	Connected      bool
-	ConnectAt      time.Time
-	LastActive     time.Time
-	mu             sync.RWMutex
+	ID                   string
+	Config               SSHConfigEntry
+	ResolvedConfig       *ResolvedSSHConfig
+	Client               *ssh.Client
+	ProxyClients         []*ssh.Client
+	AgentHandle          *sshAgentHandle
+	Connected            bool
+	ConnectAt            time.Time
+	LastActive           time.Time
+	LastServerInfoSample *sshServerInfoSample
+	mu                   sync.RWMutex
 }
 
 // SSHManager manages all SSH connections

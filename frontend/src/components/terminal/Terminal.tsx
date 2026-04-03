@@ -7,10 +7,12 @@ import { SearchAddon } from '@xterm/addon-search'
 import { CanvasAddon } from '@xterm/addon-canvas'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ImageAddon, IImageAddonOptions } from '@xterm/addon-image'
+import { useTranslation } from 'react-i18next'
 import '@xterm/xterm/css/xterm.css'
 import { BrowserOpenURL, EventsOn } from '../../../wailsjs/runtime/runtime'
-import { WriteToTerminal, StartTerminalSession, StartLocalTerminalSession, ResizeTerminal } from '../../../wailsjs/go/app/App'
+import { WriteToTerminal, StartTerminalSession, StartLocalTerminalSession, ResizeTerminal, GetSSHServerInfo } from '../../../wailsjs/go/app/App'
 import { ClipboardGetText, ClipboardSetText } from '../../../wailsjs/runtime/runtime'
+import { app } from '../../../wailsjs/go/models'
 import logger from '../../utils/logger'
 import './Terminal.css'
 
@@ -18,19 +20,64 @@ interface TerminalProps {
   sessionId: string
   sessionType: 'ssh' | 'local'
   isActive: boolean
+  connected?: boolean
   enableSelectToCopy: boolean
   enableRightClickPaste: boolean
   initialDir?: string  // Optional initial working directory for local terminals
+}
+
+type SSHServerInfo = app.SSHServerInfo
+
+const SERVER_INFO_REFRESH_MS = 5000
+
+const formatBytes = (bytes?: number | null): string => {
+  if (!bytes || bytes <= 0) return '--'
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  let value = bytes
+  let unitIndex = 0
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+
+  const digits = value >= 100 || unitIndex === 0 ? 0 : 1
+  return `${value.toFixed(digits)} ${units[unitIndex]}`
+}
+
+const formatRate = (bytesPerSecond?: number | null): string => {
+  if (bytesPerSecond == null || bytesPerSecond < 0) return '--'
+  return `${formatBytes(bytesPerSecond)}/s`
+}
+
+const formatUsage = (used?: number | null, total?: number | null): string => {
+  if (!total || total <= 0) return '--'
+  return `${formatBytes(used)} / ${formatBytes(total)}`
+}
+
+const formatUptime = (seconds?: number | null): string => {
+  if (!seconds || seconds <= 0) return '--'
+
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
 }
 
 const Terminal: React.FC<TerminalProps> = ({
   sessionId,
   sessionType,
   isActive,
+  connected = true,
   enableSelectToCopy,
   enableRightClickPaste,
   initialDir = '',
 }) => {
+  const { t } = useTranslation('terminal')
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -49,6 +96,9 @@ const Terminal: React.FC<TerminalProps> = ({
   // Search bar state
   const [searchVisible, setSearchVisible] = useState(false)
   const [searchText, setSearchText] = useState('')
+  const [serverInfo, setServerInfo] = useState<SSHServerInfo | null>(null)
+  const [serverInfoLoading, setServerInfoLoading] = useState(false)
+  const [serverInfoError, setServerInfoError] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -100,6 +150,63 @@ const Terminal: React.FC<TerminalProps> = ({
       xtermRef.current.focus()
     }
   }, [])
+
+  useEffect(() => {
+    if (sessionType !== 'ssh' || !connected) {
+      setServerInfo(null)
+      setServerInfoLoading(false)
+      setServerInfoError('')
+      return
+    }
+
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const pollServerInfo = async (isInitialLoad: boolean) => {
+      if (isInitialLoad) {
+        setServerInfoLoading(true)
+      }
+
+      try {
+        const info = await GetSSHServerInfo(sessionId)
+        if (cancelled) return
+
+        setServerInfo(info)
+        setServerInfoError('')
+      } catch (error) {
+        if (cancelled) return
+
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const normalizedMessage = errorMessage.toLowerCase()
+        if (normalizedMessage.includes('session not connected') || normalizedMessage.includes('session not found')) {
+          setServerInfo(null)
+          setServerInfoError('')
+          return
+        }
+
+        logger.log('⚠️ [Terminal] Failed to load SSH server info:', errorMessage)
+        setServerInfoError(errorMessage)
+      } finally {
+        if (!cancelled) {
+          if (isInitialLoad) {
+            setServerInfoLoading(false)
+          }
+          timer = setTimeout(() => {
+            void pollServerInfo(false)
+          }, SERVER_INFO_REFRESH_MS)
+        }
+      }
+    }
+
+    void pollServerInfo(true)
+
+    return () => {
+      cancelled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+    }
+  }, [connected, sessionId, sessionType])
 
   const writePastedTextToTerminal = useCallback(async (text: string) => {
     if (!text) return
@@ -465,6 +572,22 @@ const Terminal: React.FC<TerminalProps> = ({
     const normalizeKey = (value: string) => (value.length === 1 ? value.toLowerCase() : value)
     const isKey = (event: KeyboardEvent, key: string, code: string) =>
       normalizeKey(event.key) === key || event.code === code
+    const getCtrlLetterSequence = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+        return null
+      }
+      if (!event.code.startsWith('Key') || event.code.length !== 4) {
+        return null
+      }
+
+      const upperChar = event.code.slice(3)
+      const charCode = upperChar.charCodeAt(0)
+      if (charCode < 65 || charCode > 90) {
+        return null
+      }
+
+      return String.fromCharCode(charCode - 64)
+    }
     logger.log('🎯 [Terminal] Installing custom key handler, isMac:', isMac);
     
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
@@ -616,8 +739,21 @@ const Terminal: React.FC<TerminalProps> = ({
         return false
       }
 
-      // On Mac, let Ctrl+[key] shortcuts pass through to terminal
-      // This allows Ctrl+A, Ctrl+D, Ctrl+E, Ctrl+K, Ctrl+U, Ctrl+Z, etc. to work properly
+      // On macOS WKWebView, some Ctrl+letter combinations can be swallowed by the
+      // hidden textarea before xterm.js turns them into control characters. Send
+      // the ASCII control byte ourselves so tmux/readline shortcuts stay reliable.
+      const ctrlLetterSequence = isMac ? getCtrlLetterSequence(event) : null
+      if (ctrlLetterSequence && !isKey(event, 'c', 'KeyC') && !isKey(event, 'd', 'KeyD') && !isKey(event, 'v', 'KeyV')) {
+        logger.log('✅ [Terminal] Sending macOS Ctrl+' + event.code.slice(3) + ' as control sequence');
+        event.preventDefault()
+        WriteToTerminal(sessionId, ctrlLetterSequence).catch((err) => {
+          console.error('Failed to send control sequence to terminal:', err)
+        })
+        return false
+      }
+
+      // Let xterm.js handle the remaining macOS Ctrl shortcuts, especially
+      // non-letter sequences like Ctrl+[ / Ctrl+\ / Ctrl+].
       if (isMac && event.ctrlKey && !event.metaKey && !event.altKey && !isKey(event, 'c', 'KeyC')) {
         logger.log('✅ [Terminal] Ctrl+' + normalizeKey(event.key).toUpperCase() + ' passing through to terminal');
         return true // Let terminal handle Ctrl shortcuts (except Ctrl+C which we handled above)
@@ -740,6 +876,25 @@ const Terminal: React.FC<TerminalProps> = ({
     }
   }, [sessionId, sessionType, copyTextToClipboard, decodeOsc52Text, handleResize, openTerminalLink, readClipboardText, writeClipboardText, writePastedTextToTerminal])
 
+  const shouldShowServerInfo = sessionType === 'ssh' && connected
+  const systemSummary = serverInfo
+    ? [serverInfo.distro, serverInfo.kernel, serverInfo.architecture].filter(Boolean).join(' · ') || '--'
+    : '--'
+  const cpuSummary = serverInfo
+    ? [`${serverInfo.cpuCores || '--'}C`, serverInfo.cpuModel].filter(Boolean).join(' · ') || '--'
+    : '--'
+  const memorySummary = serverInfo
+    ? formatUsage(serverInfo.memoryUsedBytes, serverInfo.memoryTotalBytes)
+    : '--'
+  const diskSummary = serverInfo
+    ? formatUsage(serverInfo.diskUsedBytes, serverInfo.diskTotalBytes)
+    : '--'
+  const loadSummary = serverInfo?.loadAverage1 || '--'
+  const uptimeSummary = serverInfo ? formatUptime(serverInfo.uptimeSeconds) : '--'
+  const networkSummary = serverInfo
+    ? `${serverInfo.networkInterface || '--'} ↓ ${serverInfo.networkRateReady ? formatRate(serverInfo.networkRxBytesPerSec) : t('serverInfoSampling')} ↑ ${serverInfo.networkRateReady ? formatRate(serverInfo.networkTxBytesPerSec) : t('serverInfoSampling')}`
+    : '--'
+
   return (
     <div className="terminal-wrapper">
       {/* Search bar overlay */}
@@ -775,6 +930,50 @@ const Terminal: React.FC<TerminalProps> = ({
         ref={terminalRef}
         className="terminal-container"
       />
+      {shouldShowServerInfo && (
+        <div className="terminal-server-info-bar">
+          {serverInfoLoading && !serverInfo ? (
+            <div className="terminal-server-info-status">
+              {t('serverInfoLoading')}
+            </div>
+          ) : serverInfo ? (
+            <div className="terminal-server-info-grid">
+              <div className="server-info-pill" title={systemSummary}>
+                <span className="server-info-label">{t('serverInfoSystem')}</span>
+                <span className="server-info-value">{systemSummary}</span>
+              </div>
+              <div className="server-info-pill" title={cpuSummary}>
+                <span className="server-info-label">{t('serverInfoCpu')}</span>
+                <span className="server-info-value">{cpuSummary}</span>
+              </div>
+              <div className="server-info-pill" title={memorySummary}>
+                <span className="server-info-label">{t('serverInfoMemory')}</span>
+                <span className="server-info-value">{memorySummary}</span>
+              </div>
+              <div className="server-info-pill" title={diskSummary}>
+                <span className="server-info-label">{t('serverInfoDisk')}</span>
+                <span className="server-info-value">{diskSummary}</span>
+              </div>
+              <div className="server-info-pill" title={networkSummary}>
+                <span className="server-info-label">{t('serverInfoNetwork')}</span>
+                <span className="server-info-value">{networkSummary}</span>
+              </div>
+              <div className="server-info-pill" title={loadSummary}>
+                <span className="server-info-label">{t('serverInfoLoad')}</span>
+                <span className="server-info-value">{loadSummary}</span>
+              </div>
+              <div className="server-info-pill" title={uptimeSummary}>
+                <span className="server-info-label">{t('serverInfoUptime')}</span>
+                <span className="server-info-value">{uptimeSummary}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="terminal-server-info-status terminal-server-info-status-error">
+              {serverInfoError ? t('serverInfoUnavailable') : t('serverInfoLoading')}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

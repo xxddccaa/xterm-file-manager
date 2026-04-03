@@ -138,6 +138,10 @@ export function GetSSHConfig() {
   return window['go']['app']['App']['GetSSHConfig']();
 }
 
+export function GetSSHServerInfo(arg1) {
+  return window['go']['app']['App']['GetSSHServerInfo'](arg1);
+}
+
 export function GetSyncRules() {
   return window['go']['app']['App']['GetSyncRules']();
 }

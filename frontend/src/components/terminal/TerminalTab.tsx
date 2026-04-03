@@ -1371,6 +1371,7 @@ const TerminalTab: React.FC = () => {
                         sessionId={session.id}
                         sessionType={session.type}
                         isActive={isActive}
+                        connected={session.connected}
                         enableSelectToCopy={terminalSettings.enableSelectToCopy}
                         enableRightClickPaste={terminalSettings.enableRightClickPaste}
                         initialDir={session.initialDir}
@@ -1444,6 +1445,7 @@ const TerminalTab: React.FC = () => {
                        sessionId={session.id}
                        sessionType={session.type}
                        isActive={isActive}
+                       connected={session.connected}
                        enableSelectToCopy={terminalSettings.enableSelectToCopy}
                        enableRightClickPaste={terminalSettings.enableRightClickPaste}
                        initialDir={session.initialDir}

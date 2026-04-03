@@ -47,5 +47,15 @@
   "sshKeyPassphraseCachedInvalid": "The cached private key passphrase is no longer valid. Enter it again.",
   "sshKeyPassphraseEmpty": "Enter a private key passphrase.",
   "connectWithPassword": "Connect",
-  "unlockPrivateKey": "Unlock Key"
+  "unlockPrivateKey": "Unlock Key",
+  "serverInfoLoading": "Loading server information...",
+  "serverInfoUnavailable": "Server information is temporarily unavailable",
+  "serverInfoSampling": "Sampling",
+  "serverInfoSystem": "System",
+  "serverInfoCpu": "CPU",
+  "serverInfoMemory": "Memory",
+  "serverInfoDisk": "Disk",
+  "serverInfoNetwork": "Network",
+  "serverInfoLoad": "Load",
+  "serverInfoUptime": "Uptime"
 }

@@ -71,6 +71,8 @@ export function GetRemoteHomeDir(arg1:string):Promise<string>;
 
 export function GetSSHConfig():Promise<Array<app.SSHConfigEntry>>;
 
+export function GetSSHServerInfo(arg1:string):Promise<app.SSHServerInfo>;
+
 export function GetSyncRules():Promise<Array<app.SyncRule>>;
 
 export function GetTerminalSettings():Promise<string>;

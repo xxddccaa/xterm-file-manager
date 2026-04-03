@@ -47,5 +47,15 @@
   "sshKeyPassphraseCachedInvalid": "缓存的私钥口令已失效，请重新输入。",
   "sshKeyPassphraseEmpty": "请输入私钥口令。",
   "connectWithPassword": "连接",
-  "unlockPrivateKey": "解锁私钥"
+  "unlockPrivateKey": "解锁私钥",
+  "serverInfoLoading": "正在读取服务器信息...",
+  "serverInfoUnavailable": "暂时无法读取服务器信息",
+  "serverInfoSampling": "采样中",
+  "serverInfoSystem": "系统",
+  "serverInfoCpu": "CPU",
+  "serverInfoMemory": "内存",
+  "serverInfoDisk": "存储",
+  "serverInfoNetwork": "网络",
+  "serverInfoLoad": "负载",
+  "serverInfoUptime": "运行"
 }

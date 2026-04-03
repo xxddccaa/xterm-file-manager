@@ -94,6 +94,52 @@ export namespace app {
 	        this.identityFile = source["identityFile"];
 	    }
 	}
+	export class SSHServerInfo {
+	    distro: string;
+	    kernel: string;
+	    architecture: string;
+	    cpuCores: number;
+	    cpuModel: string;
+	    memoryTotalBytes: number;
+	    memoryUsedBytes: number;
+	    memoryAvailableBytes: number;
+	    diskTotalBytes: number;
+	    diskUsedBytes: number;
+	    diskAvailableBytes: number;
+	    uptimeSeconds: number;
+	    loadAverage1: string;
+	    networkInterface: string;
+	    networkRxBytesPerSec: number;
+	    networkTxBytesPerSec: number;
+	    networkRateReady: boolean;
+	    collectedAtUnix: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SSHServerInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.distro = source["distro"];
+	        this.kernel = source["kernel"];
+	        this.architecture = source["architecture"];
+	        this.cpuCores = source["cpuCores"];
+	        this.cpuModel = source["cpuModel"];
+	        this.memoryTotalBytes = source["memoryTotalBytes"];
+	        this.memoryUsedBytes = source["memoryUsedBytes"];
+	        this.memoryAvailableBytes = source["memoryAvailableBytes"];
+	        this.diskTotalBytes = source["diskTotalBytes"];
+	        this.diskUsedBytes = source["diskUsedBytes"];
+	        this.diskAvailableBytes = source["diskAvailableBytes"];
+	        this.uptimeSeconds = source["uptimeSeconds"];
+	        this.loadAverage1 = source["loadAverage1"];
+	        this.networkInterface = source["networkInterface"];
+	        this.networkRxBytesPerSec = source["networkRxBytesPerSec"];
+	        this.networkTxBytesPerSec = source["networkTxBytesPerSec"];
+	        this.networkRateReady = source["networkRateReady"];
+	        this.collectedAtUnix = source["collectedAtUnix"];
+	    }
+	}
 	export class SyncRule {
 	    id: string;
 	    serverName: string;

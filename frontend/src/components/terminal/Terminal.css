@@ -111,3 +111,55 @@
   background: rgba(255, 77, 79, 0.2);
   color: #ff4d4f;
 }
+
+.terminal-server-info-bar {
+  border-top: 1px solid #303030;
+  background: linear-gradient(180deg, #181818 0%, #141414 100%);
+  padding: 8px 10px;
+  flex-shrink: 0;
+}
+
+.terminal-server-info-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.server-info-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 220px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.server-info-label {
+  color: #8a8a8a;
+  font-size: 11px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.server-info-value {
+  color: #e3e3e3;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-server-info-status {
+  color: #9aa0a6;
+  font-size: 12px;
+  padding: 4px 2px;
+}
+
+.terminal-server-info-status-error {
+  color: #ff9c6e;
+}
