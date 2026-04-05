@@ -14,6 +14,7 @@ import { WriteToTerminal, StartTerminalSession, StartLocalTerminalSession, Resiz
 import { ClipboardGetText, ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import { app } from '../../../wailsjs/go/models'
 import logger from '../../utils/logger'
+import { getTerminalRendererMode } from '../../utils/terminalRenderer'
 import './Terminal.css'
 
 interface TerminalProps {
@@ -473,29 +474,41 @@ const Terminal: React.FC<TerminalProps> = ({
       return true
     }))
 
-    // 6. GPU-accelerated renderer: try WebGL first, fallback to Canvas
-    try {
-      const webglAddon = new WebglAddon()
-      webglAddon.onContextLoss(() => {
-        logger.log('⚠️ [Terminal] WebGL context lost, falling back to Canvas renderer')
-        webglAddon.dispose()
+    const rendererMode = getTerminalRendererMode({
+      sessionType,
+      platform: navigator.platform,
+      userAgent: navigator.userAgent,
+    })
+
+    // 6. GPU-accelerated renderer: try WebGL first, fallback to Canvas.
+    // Keep the DOM renderer for Windows local terminals because WebView2 can
+    // make the adjacent local file pane flash while GPU-backed canvases repaint.
+    if (rendererMode === 'accelerated') {
+      try {
+        const webglAddon = new WebglAddon()
+        webglAddon.onContextLoss(() => {
+          logger.log('⚠️ [Terminal] WebGL context lost, falling back to Canvas renderer')
+          webglAddon.dispose()
+          try {
+            term.loadAddon(new CanvasAddon())
+            logger.log('✅ [Terminal] Canvas renderer loaded as fallback')
+          } catch (canvasErr) {
+            logger.log('⚠️ [Terminal] Canvas renderer also failed, using default DOM renderer')
+          }
+        })
+        term.loadAddon(webglAddon)
+        logger.log('✅ [Terminal] WebGL renderer loaded')
+      } catch (webglErr) {
+        logger.log('⚠️ [Terminal] WebGL renderer unavailable, trying Canvas...')
         try {
           term.loadAddon(new CanvasAddon())
-          logger.log('✅ [Terminal] Canvas renderer loaded as fallback')
+          logger.log('✅ [Terminal] Canvas renderer loaded')
         } catch (canvasErr) {
           logger.log('⚠️ [Terminal] Canvas renderer also failed, using default DOM renderer')
         }
-      })
-      term.loadAddon(webglAddon)
-      logger.log('✅ [Terminal] WebGL renderer loaded')
-    } catch (webglErr) {
-      logger.log('⚠️ [Terminal] WebGL renderer unavailable, trying Canvas...')
-      try {
-        term.loadAddon(new CanvasAddon())
-        logger.log('✅ [Terminal] Canvas renderer loaded')
-      } catch (canvasErr) {
-        logger.log('⚠️ [Terminal] Canvas renderer also failed, using default DOM renderer')
       }
+    } else {
+      logger.log('🪟 [Terminal] Using DOM renderer for Windows local terminal to avoid local file pane flicker')
     }
 
     fitAddon.fit()

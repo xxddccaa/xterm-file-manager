@@ -37,6 +37,17 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.46 - Windows Local Terminal Fixes & Explorer Navigation (2026-04-05)
+
+**New Features:**
+- **VS Code-like local file explorer mode**: The local file pane now supports a tree navigation view with expandable folders, sticky root path, and quick switching between list view and explorer view while keeping the current directory context visible.
+
+**Bug Fixes:**
+- **Windows local terminal no longer disconnects immediately**: Fixed the ConPTY session monitor so it waits for the actual shell process instead of marking the terminal disconnected right after startup.
+- **Windows file drag-to-terminal path insertion is shell-safe**: Local Windows paths with spaces are now inserted with double quotes so they work correctly in both `cmd.exe` and PowerShell.
+- **Windows local file pane "go up" path corruption fixed**: Navigating to the parent directory no longer turns `D:\...` into `\D:\...` on Windows.
+- **Windows local terminal flicker reduced**: Local terminals on Windows now use the DOM renderer instead of GPU-backed renderers to avoid flashing the adjacent file pane in WebView2.
+
 ### v2.45 - SSH Server Info & macOS Ctrl Shortcut Fixes (2026-04-03)
 
 **New Features:**

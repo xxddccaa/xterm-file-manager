@@ -3,11 +3,13 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/UserExistsError/conpty"
@@ -17,13 +19,145 @@ import (
 // TerminalSessionWindows extends TerminalSession with Windows-specific fields
 type TerminalSessionWindows struct {
 	*TerminalSession
-	ConPTY *conpty.ConPty // Windows ConPTY handle
+	ConPTY     *conpty.ConPty // Windows ConPTY handle
+	waitCancel context.CancelFunc
 }
 
 var (
 	windowsSessions   = make(map[string]*TerminalSessionWindows)
 	windowsSessionsMu sync.RWMutex
 )
+
+type windowsTerminalWaiter interface {
+	Wait(ctx context.Context) (uint32, error)
+}
+
+type windowsTerminalLaunchConfig struct {
+	Shell   string
+	WorkDir string
+	Env     []string
+	Rows    int
+	Cols    int
+}
+
+func prepareWindowsTerminalLaunchConfig(
+	initialDir string,
+	rows int,
+	cols int,
+	environ []string,
+	comspec string,
+	lookPath func(string) (string, error),
+) windowsTerminalLaunchConfig {
+	return windowsTerminalLaunchConfig{
+		Shell:   resolveWindowsTerminalShell(comspec, lookPath),
+		WorkDir: resolveWindowsTerminalWorkDir(initialDir),
+		Env:     buildWindowsTerminalEnv(environ),
+		Rows:    rows,
+		Cols:    cols,
+	}
+}
+
+func resolveWindowsTerminalShell(comspec string, lookPath func(string) (string, error)) string {
+	if strings.TrimSpace(comspec) != "" {
+		return strings.TrimSpace(comspec)
+	}
+
+	for _, candidate := range []string{"pwsh.exe", "powershell.exe", "cmd.exe"} {
+		if _, err := lookPath(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	return "cmd.exe"
+}
+
+func resolveWindowsTerminalWorkDir(initialDir string) string {
+	if strings.TrimSpace(initialDir) == "" {
+		return ""
+	}
+
+	if stat, err := os.Stat(initialDir); err == nil && stat.IsDir() {
+		return initialDir
+	}
+
+	log.Printf("⚠️ Invalid initial directory %s, using default", initialDir)
+	return ""
+}
+
+func buildWindowsTerminalEnv(environ []string) []string {
+	cleanEnv := make([]string, 0, len(environ)+1)
+	termSet := false
+	for _, env := range environ {
+		if strings.HasPrefix(strings.ToUpper(env), "TERM=") {
+			termSet = true
+		}
+		cleanEnv = append(cleanEnv, env)
+	}
+
+	if !termSet {
+		cleanEnv = append(cleanEnv, "TERM=xterm-256color")
+	}
+
+	return cleanEnv
+}
+
+func buildWindowsCommandLine(command string) string {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return "cmd.exe"
+	}
+
+	if strings.HasPrefix(trimmed, "\"") {
+		return trimmed
+	}
+
+	if strings.ContainsAny(trimmed, " \t") {
+		return `"` + trimmed + `"`
+	}
+
+	return trimmed
+}
+
+func (a *App) monitorWindowsTerminalSession(
+	sessionID string,
+	termSession *TerminalSession,
+	waitCtx context.Context,
+	waiter windowsTerminalWaiter,
+) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("❌ PANIC RECOVERED in local terminal monitor goroutine for session %s: %v", sessionID, r)
+		}
+	}()
+
+	exitCode, err := waiter.Wait(waitCtx)
+	if waitCtx.Err() != nil {
+		log.Printf("ℹ️ Windows terminal session monitor canceled: %s", sessionID)
+		return
+	}
+
+	reason := "Process exited"
+	if err != nil {
+		reason = fmt.Sprintf("Process wait failed: %v", err)
+		log.Printf("⚠️ Windows terminal wait failed for %s: %v", sessionID, err)
+	} else if exitCode != 0 {
+		reason = fmt.Sprintf("Process exited with code %d", exitCode)
+	}
+
+	termSession.mu.Lock()
+	termSession.isConnected = false
+	termSession.mu.Unlock()
+	termSession.stopOnce.Do(func() { close(termSession.stopChan) })
+
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "terminal:disconnected", map[string]interface{}{
+			"sessionId": sessionID,
+			"reason":    reason,
+		})
+	}
+
+	log.Printf("Local terminal session ended: %s (%s)", sessionID, reason)
+}
 
 // StartLocalTerminalSession starts a local PTY session using Windows ConPTY
 func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, initialDir string) error {
@@ -48,58 +182,35 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 		}
 	}()
 
-	// Determine shell based on Windows environment
-	shell := os.Getenv("COMSPEC") // Usually C:\Windows\system32\cmd.exe
-	if shell == "" {
-		// Try PowerShell first (more capable), fall back to cmd.exe
-		if _, err := exec.LookPath("pwsh.exe"); err == nil {
-			shell = "pwsh.exe"
-		} else if _, err := exec.LookPath("powershell.exe"); err == nil {
-			shell = "powershell.exe"
-		} else {
-			shell = "cmd.exe"
-		}
+	launchConfig := prepareWindowsTerminalLaunchConfig(
+		initialDir,
+		rows,
+		cols,
+		os.Environ(),
+		os.Getenv("COMSPEC"),
+		exec.LookPath,
+	)
+
+	options := []conpty.ConPtyOption{
+		conpty.ConPtyDimensions(launchConfig.Cols, launchConfig.Rows),
+		conpty.ConPtyEnv(launchConfig.Env),
+	}
+	if launchConfig.WorkDir != "" {
+		options = append(options, conpty.ConPtyWorkDir(launchConfig.WorkDir))
 	}
 
-	// Create ConPTY with initial size
-	cpty, err := conpty.Start(shell)
+	// Create ConPTY with the resolved working directory and environment.
+	cpty, err := conpty.Start(buildWindowsCommandLine(launchConfig.Shell), options...)
 	if err != nil {
 		return fmt.Errorf("failed to create ConPTY: %v", err)
 	}
 
-	// Create command
-	cmd := exec.Command(shell)
-
-	// Set initial working directory if provided and valid
-	if initialDir != "" {
-		if stat, err := os.Stat(initialDir); err == nil && stat.IsDir() {
-			cmd.Dir = initialDir
-		} else {
-			log.Printf("⚠️ Invalid initial directory %s, using default", initialDir)
-		}
-	}
-
-	// Set environment variables
-	// Note: Windows doesn't have VIRTUAL_ENV issues like Unix, but we keep the pattern
-	cleanEnv := make([]string, 0, len(os.Environ()))
-	for _, env := range os.Environ() {
-		cleanEnv = append(cleanEnv, env)
-	}
-	cmd.Env = cleanEnv
-
-	// Set initial ConPTY size
-	err = cpty.Resize(cols, rows)
-	if err != nil {
-		cpty.Close()
-		return fmt.Errorf("failed to set ConPTY initial size: %v", err)
-	}
-
-	log.Printf("✅ Started Windows terminal with shell: %s, size: %dx%d", shell, cols, rows)
+	log.Printf("✅ Started Windows terminal with shell: %s, size: %dx%d", launchConfig.Shell, cols, rows)
 
 	// Create terminal session with UTF-8 safe buffer
 	termSession := &TerminalSession{
 		SessionID:   sessionID,
-		LocalCmd:    cmd,
+		LocalCmd:    nil,
 		LocalPTY:    nil, // Not used on Windows
 		LocalStdin:  cpty,
 		stopChan:    make(chan struct{}),
@@ -108,10 +219,13 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 		utf8Buffer:  &UTF8SafeBuffer{}, // Prevent UTF-8 truncation in Windows terminal output
 	}
 
+	waitCtx, waitCancel := context.WithCancel(context.Background())
+
 	// Store Windows-specific session
 	winSession := &TerminalSessionWindows{
 		TerminalSession: termSession,
 		ConPTY:          cpty,
+		waitCancel:      waitCancel,
 	}
 
 	windowsSessionsMu.Lock()
@@ -167,33 +281,8 @@ func (a *App) StartLocalTerminalSession(sessionID string, rows int, cols int, in
 		}
 	}()
 
-	// Monitor process
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("❌ PANIC RECOVERED in local terminal monitor goroutine for session %s: %v", sessionID, r)
-			}
-		}()
-
-		// Wait for process to exit (ConPTY doesn't have cmd.Wait(), use pid monitoring)
-		// For now, we rely on the read loop detecting EOF
-		// TODO: Implement proper process monitoring via Windows API if needed
-
-		termSession.mu.Lock()
-		termSession.isConnected = false
-		termSession.mu.Unlock()
-		termSession.stopOnce.Do(func() { close(termSession.stopChan) })
-
-		// Emit disconnection event to frontend
-		if a.ctx != nil {
-			wailsRuntime.EventsEmit(a.ctx, "terminal:disconnected", map[string]interface{}{
-				"sessionId": sessionID,
-				"reason":    "Process exited",
-			})
-		}
-
-		log.Printf("Local terminal session ended: %s", sessionID)
-	}()
+	// Monitor the actual ConPTY process instead of disconnecting immediately.
+	go a.monitorWindowsTerminalSession(sessionID, termSession, waitCtx, cpty)
 
 	return nil
 }
@@ -225,6 +314,9 @@ func closeLocalTerminal(termSession *TerminalSession) {
 	windowsSessionsMu.Unlock()
 
 	if exists && winSession.ConPTY != nil {
+		if winSession.waitCancel != nil {
+			winSession.waitCancel()
+		}
 		winSession.ConPTY.Close()
 	}
 }
