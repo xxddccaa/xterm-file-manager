@@ -37,6 +37,18 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.48 - SSH Config Save Formatting & Repository Cleanup (2026-04-09)
+
+**New Features:**
+- **SSH config save auto-formatting**: Saving `~/.ssh/config` through the app now inserts a blank line between adjacent `Host` blocks by default, making large server lists much easier to scan and maintain.
+
+**Bug Fixes:**
+- **SSH config spacing stays tidy on save**: The backend now normalizes host-block spacing for both local and remote SSH config saves while preserving comments inside each server block.
+- **Finder metadata no longer belongs in releases**: Removed tracked `.DS_Store` files from the repository so macOS Finder metadata stops polluting release diffs.
+
+**Quality Improvements:**
+- **Added SSH config formatting tests**: Covered host-block spacing and inline comment preservation with dedicated Go tests.
+
 ### v2.47 - Server Ordering & Terminal Copy Reliability (2026-04-09)
 
 **New Features:**

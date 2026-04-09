@@ -257,12 +257,16 @@ func (a *App) WriteLocalFile(filePath string, content string) error {
 		filePath = filepath.Join(homeDir, filePath[2:])
 	}
 
+	if isSSHConfigPath(originalPath, filePath) {
+		content = formatSSHConfigSpacing(content)
+	}
+
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write file: %v", err)
 	}
 
 	// Detect SSH config file changes and trigger reload event
-	if a.ctx != nil && (originalPath == "~/.ssh/config" || filepath.Base(filePath) == "config" && filepath.Base(filepath.Dir(filePath)) == ".ssh") {
+	if a.ctx != nil && isSSHConfigPath(originalPath, filePath) {
 		log.Printf("🔐 SSH config file saved, triggering reload event")
 		runtime.EventsEmit(a.ctx, "ssh:config-changed", map[string]interface{}{
 			"filePath": originalPath,
@@ -402,6 +406,10 @@ func (a *App) WriteRemoteFile(sessionID string, remotePath string, content strin
 	originalPath := remotePath
 	remotePath = resolveRemotePath(sftpClient, remotePath)
 
+	if isSSHConfigPath(originalPath, remotePath) {
+		content = formatSSHConfigSpacing(content)
+	}
+
 	// Create/open remote file
 	file, err := sftpClient.Create(remotePath)
 	if err != nil {
@@ -416,7 +424,7 @@ func (a *App) WriteRemoteFile(sessionID string, remotePath string, content strin
 	}
 
 	// Detect SSH config file changes and trigger reload event
-	if a.ctx != nil && (originalPath == "~/.ssh/config" || filepath.Base(remotePath) == "config" && filepath.Base(filepath.Dir(remotePath)) == ".ssh") {
+	if a.ctx != nil && isSSHConfigPath(originalPath, remotePath) {
 		log.Printf("🔐 Remote SSH config file saved, triggering reload event")
 		runtime.EventsEmit(a.ctx, "ssh:config-changed", map[string]interface{}{
 			"filePath": originalPath,
