@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -341,7 +340,6 @@ func GetSSHConfig() []SSHConfigEntry {
 	}
 
 	aliases = uniqueStrings(aliases)
-	sort.Strings(aliases)
 
 	entries := make([]SSHConfigEntry, 0, len(aliases))
 	for idx, alias := range aliases {

@@ -37,6 +37,19 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.47 - Server Ordering & Terminal Copy Reliability (2026-04-09)
+
+**New Features:**
+- **SSH server sidebar sorting**: The left server list now supports one-click A-Z / Z-A sorting and can write the reordered `Host` blocks back into `~/.ssh/config`.
+- **Manual server drag reordering**: Servers can now be dragged directly in the sidebar, and the visible order is persisted back to the SSH config file instead of being treated as temporary UI state.
+
+**Bug Fixes:**
+- **Multi-page terminal copy works through native copy actions**: When selecting terminal text across long scrollback and using the app's copy action, the terminal now reuses a short-lived cached selection snapshot so copied text no longer disappears on long drag selections.
+- **SSH server list respects config order**: The backend no longer force-sorts SSH aliases alphabetically, so custom ordering inside `~/.ssh/config` is preserved in the UI.
+
+**Quality Improvements:**
+- **Added ordering and clipboard regression tests**: Covered SSH config ordering helpers and terminal copy fallback behavior with new frontend and backend tests to reduce release regressions.
+
 ### v2.46 - Windows Local Terminal Fixes & Explorer Navigation (2026-04-05)
 
 **New Features:**

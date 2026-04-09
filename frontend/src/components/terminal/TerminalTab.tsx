@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Layout, Input, Button, List, Spin, Modal, message } from 'antd'
-import { SearchOutlined, PlusOutlined, CloseOutlined, EditOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { Layout, Input, Button, List, Spin, Modal, message, Tooltip } from 'antd'
+import { SearchOutlined, PlusOutlined, CloseOutlined, EditOutlined, LeftOutlined, RightOutlined, SortAscendingOutlined, SortDescendingOutlined, MenuOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { main } from '../../../wailsjs/go/models'
 type SSHConfigEntry = main.SSHConfigEntry
-import { ClearSSHPasswordCache, ConnectSSH, ConnectSSHWithAuth, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal, CloseTerminalSession, OpenEditorWindow, GetHomeDirectory, SaveTerminalSessions, LoadTerminalSessions } from '../../../wailsjs/go/app/App'
+import { ClearSSHPasswordCache, ConnectSSH, ConnectSSHWithAuth, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal, CloseTerminalSession, OpenEditorWindow, GetHomeDirectory, SaveTerminalSessions, LoadTerminalSessions, ReadLocalFile, WriteLocalFile } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import Terminal from './Terminal'
 import FileManager from '../file-manager/FileManager'
@@ -12,6 +12,7 @@ import LocalFileManager from '../file-manager/LocalFileManager'
 import { escapeShellPaths } from '../../utils/shellEscape'
 import { getDragPayload, clearDragPayload, setDragTarget, clearDragTarget, getDragTarget } from '../../utils/dragState'
 import { dlog } from '../../utils/debugLog'
+import { haveSameSSHConfigOrder, reorderSSHConfigContent, reorderSSHConfigsByVisibleHosts, sortSSHConfigsByName } from '../../utils/sshConfigOrdering'
 import './TerminalTab.css'
 
 const { Sider, Content } = Layout
@@ -144,6 +145,8 @@ const parseSSHConnectError = (error: any): ParsedSSHConnectError => {
 const TerminalTab: React.FC = () => {
   const { t } = useTranslation(['terminal', 'common'])
   const [sshConfigs, setSshConfigs] = useState<SSHConfigEntry[]>([])
+  const [savingServerOrder, setSavingServerOrder] = useState(false)
+  const [draggedServerHost, setDraggedServerHost] = useState<string | null>(null)
   const [searchText, setSearchText] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -213,6 +216,9 @@ const TerminalTab: React.FC = () => {
     submitting: false,
   })
   const [authInput, setAuthInput] = useState('')
+  const serverOrderChangedRef = useRef(false)
+  const persistedSSHConfigsRef = useRef<SSHConfigEntry[]>([])
+  const suppressServerClickRef = useRef(false)
 
   useEffect(() => {
     loadSSHConfig()
@@ -310,7 +316,9 @@ const TerminalTab: React.FC = () => {
   const loadSSHConfig = async () => {
     try {
       const configs = await GetSSHConfig()
-      setSshConfigs(configs || [])
+      const nextConfigs = configs || []
+      setSshConfigs(nextConfigs)
+      persistedSSHConfigsRef.current = nextConfigs
     } catch (error) {
       console.error('Failed to load SSH config:', error)
       message.error(t('terminal:failedToLoadSSHConfig'))
@@ -947,6 +955,130 @@ const TerminalTab: React.FC = () => {
     config.host.toLowerCase().includes(searchText.toLowerCase())
   )
 
+  const persistServerOrder = useCallback(async (
+    nextConfigs: SSHConfigEntry[],
+    successMessage?: string,
+  ) => {
+    if (haveSameSSHConfigOrder(persistedSSHConfigsRef.current, nextConfigs)) {
+      return true
+    }
+
+    const previousConfigs = persistedSSHConfigsRef.current
+    setSshConfigs(nextConfigs)
+    setSavingServerOrder(true)
+
+    try {
+      const sshConfigContent = await ReadLocalFile('~/.ssh/config')
+      const reorderedConfig = reorderSSHConfigContent(
+        sshConfigContent,
+        nextConfigs.map((config) => config.host),
+      )
+
+      if (reorderedConfig.matchedBlockCount < 2) {
+        throw new Error(t('terminal:serverOrderUnavailable'))
+      }
+
+      if (reorderedConfig.changed) {
+        await WriteLocalFile('~/.ssh/config', reorderedConfig.content)
+      }
+
+      persistedSSHConfigsRef.current = nextConfigs
+
+      if (successMessage) {
+        message.success(successMessage)
+      }
+      return true
+    } catch (error: any) {
+      console.error('Failed to persist SSH server order:', error)
+      setSshConfigs(previousConfigs)
+      message.error(t('terminal:failedToSaveServerOrder', { error: getErrorMessage(error) }))
+      return false
+    } finally {
+      setSavingServerOrder(false)
+    }
+  }, [t])
+
+  const handleSortServers = useCallback(async (direction: 'asc' | 'desc') => {
+    if (savingServerOrder || sshConfigs.length < 2) {
+      return
+    }
+
+    const nextConfigs = sortSSHConfigsByName(sshConfigs, direction)
+    if (haveSameSSHConfigOrder(sshConfigs, nextConfigs)) {
+      return
+    }
+
+    await persistServerOrder(
+      nextConfigs,
+      direction === 'asc' ? t('terminal:serversSortedAsc') : t('terminal:serversSortedDesc'),
+    )
+  }, [persistServerOrder, savingServerOrder, sshConfigs, t])
+
+  const handleServerItemClick = useCallback((config: SSHConfigEntry) => {
+    if (suppressServerClickRef.current) {
+      suppressServerClickRef.current = false
+      return
+    }
+
+    handleCreateSession(config)
+  }, [handleCreateSession])
+
+  const handleServerDragStart = useCallback((event: React.DragEvent, host: string) => {
+    if (savingServerOrder) {
+      event.preventDefault()
+      return
+    }
+
+    setDraggedServerHost(host)
+    serverOrderChangedRef.current = false
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', host)
+
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.style.opacity = '0.5'
+    }
+  }, [savingServerOrder])
+
+  const handleServerDragOver = useCallback((event: React.DragEvent, targetHost: string) => {
+    if (!draggedServerHost || draggedServerHost === targetHost || savingServerOrder) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+
+    setSshConfigs((prev) => {
+      const visibleHosts = prev
+        .filter((config) => config.host.toLowerCase().includes(searchText.toLowerCase()))
+        .map((config) => config.host)
+      const next = reorderSSHConfigsByVisibleHosts(prev, draggedServerHost, targetHost, visibleHosts)
+
+      if (!haveSameSSHConfigOrder(prev, next)) {
+        serverOrderChangedRef.current = true
+      }
+
+      return next
+    })
+  }, [draggedServerHost, savingServerOrder, searchText])
+
+  const handleServerDragEnd = useCallback(async (event: React.DragEvent) => {
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.style.opacity = '1'
+    }
+
+    const orderChanged = serverOrderChangedRef.current
+    serverOrderChangedRef.current = false
+    setDraggedServerHost(null)
+
+    if (!orderChanged) {
+      return
+    }
+
+    suppressServerClickRef.current = true
+    await persistServerOrder(sshConfigs, t('terminal:serverOrderSaved'))
+  }, [persistServerOrder, sshConfigs, t])
+
   // Check if a server has an active session
   const isServerConnected = (host: string): boolean => {
     return sessions.some(session => session.name === host && session.connected && session.type === 'ssh')
@@ -1205,6 +1337,35 @@ const TerminalTab: React.FC = () => {
                 onChange={(e) => setSearchText(e.target.value)}
                 className="server-search"
               />
+              <div className="server-order-toolbar">
+                <div className="server-order-actions">
+                  <Tooltip title={t('terminal:sortServersAsc')}>
+                    <Button
+                      size="small"
+                      icon={<SortAscendingOutlined />}
+                      onClick={() => { void handleSortServers('asc') }}
+                      disabled={loading || savingServerOrder || sshConfigs.length < 2}
+                      className="server-order-btn"
+                    >
+                      {t('terminal:sortServersAsc')}
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title={t('terminal:sortServersDesc')}>
+                    <Button
+                      size="small"
+                      icon={<SortDescendingOutlined />}
+                      onClick={() => { void handleSortServers('desc') }}
+                      disabled={loading || savingServerOrder || sshConfigs.length < 2}
+                      className="server-order-btn"
+                    >
+                      {t('terminal:sortServersDesc')}
+                    </Button>
+                  </Tooltip>
+                </div>
+                <div className="server-order-hint">
+                  {t('terminal:serverOrderHint')}
+                </div>
+              </div>
               <Button
                 type="primary"
                 icon={<EditOutlined />}
@@ -1245,9 +1406,16 @@ const TerminalTab: React.FC = () => {
                   const isConnected = isServerConnected(config.host)
                   return (
                     <List.Item
-                      className="server-item"
-                      onClick={() => handleCreateSession(config)}
+                      className={`server-item ${draggedServerHost === config.host ? 'dragging' : ''}`}
+                      draggable={!savingServerOrder}
+                      onDragStart={(event) => handleServerDragStart(event, config.host)}
+                      onDragOver={(event) => handleServerDragOver(event, config.host)}
+                      onDragEnd={(event) => { void handleServerDragEnd(event) }}
+                      onClick={() => handleServerItemClick(config)}
                     >
+                      <span className="server-drag-handle" aria-hidden="true">
+                        <MenuOutlined />
+                      </span>
                       <span 
                         className="server-status" 
                         style={{ color: isConnected ? '#52c41a' : '#888' }}

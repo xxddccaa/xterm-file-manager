@@ -30,6 +30,26 @@
   margin-bottom: 12px;
 }
 
+.server-order-toolbar {
+  margin-bottom: 12px;
+}
+
+.server-order-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.server-order-btn {
+  flex: 1;
+}
+
+.server-order-hint {
+  color: #888;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .edit-config-btn {
   margin-bottom: 8px;
 }
@@ -73,8 +93,31 @@
   gap: 8px;
 }
 
+.server-item[draggable="true"] {
+  cursor: grab;
+}
+
+.server-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.server-item.dragging {
+  background: #303030;
+}
+
 .server-item:hover {
   background: #262626;
+}
+
+.server-drag-handle {
+  color: #666;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.server-item:hover .server-drag-handle,
+.server-item.dragging .server-drag-handle {
+  color: #bfbfbf;
 }
 
 /* Connection status dot — larger & more visible */

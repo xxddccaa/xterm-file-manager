@@ -15,6 +15,7 @@ import { ClipboardGetText, ClipboardSetText } from '../../../wailsjs/runtime/run
 import { app } from '../../../wailsjs/go/models'
 import logger from '../../utils/logger'
 import { getTerminalRendererMode } from '../../utils/terminalRenderer'
+import { resolveTerminalCopyText } from './terminalCopy'
 import './Terminal.css'
 
 interface TerminalProps {
@@ -30,6 +31,22 @@ interface TerminalProps {
 type SSHServerInfo = app.SSHServerInfo
 
 const SERVER_INFO_REFRESH_MS = 5000
+
+const isEditableCopyTarget = (target: EventTarget | null, terminalElement: HTMLElement): boolean => {
+  if (!(target instanceof Element)) {
+    return false
+  }
+
+  if (terminalElement.contains(target)) {
+    return false
+  }
+
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    return true
+  }
+
+  return Boolean(target.closest('[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"], [role="textbox"], .monaco-editor'))
+}
 
 const formatBytes = (bytes?: number | null): string => {
   if (!bytes || bytes <= 0) return '--'
@@ -83,6 +100,8 @@ const Terminal: React.FC<TerminalProps> = ({
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const searchAddonRef = useRef<SearchAddon | null>(null)
+  const selectionSnapshotRef = useRef('')
+  const selectionSnapshotAtRef = useRef(0)
   // Guard: prevent duplicate startSession calls (React StrictMode / fast re-renders)
   const sessionStartedRef = useRef<string | null>(null)
   // Track whether this terminal tab is currently visible
@@ -275,6 +294,13 @@ const Terminal: React.FC<TerminalProps> = ({
     const copiedViaApi = await writeClipboardText(text)
     return copiedViaNativeEvent || copiedViaApi
   }, [writeClipboardText])
+
+  const rememberTerminalSelection = useCallback((selection: string) => {
+    if (!selection) return
+
+    selectionSnapshotRef.current = selection
+    selectionSnapshotAtRef.current = Date.now()
+  }, [])
 
   const openTerminalLink = useCallback((uri: string) => {
     if (!uri) return
@@ -646,6 +672,7 @@ const Terminal: React.FC<TerminalProps> = ({
       if (isMac && event.metaKey && isKey(event, 'c', 'KeyC') && !event.ctrlKey) {
         const selection = term.getSelection()
         if (selection) {
+          rememberTerminalSelection(selection)
           logger.log('✅ [Terminal] Cmd+C detected, copying selection');
           event.preventDefault()
           copyTextToClipboard(selection).catch((err) => {
@@ -676,6 +703,7 @@ const Terminal: React.FC<TerminalProps> = ({
       if (!isMac && event.ctrlKey && event.shiftKey && isKey(event, 'c', 'KeyC')) {
         const selection = term.getSelection()
         if (selection) {
+          rememberTerminalSelection(selection)
           logger.log('✅ [Terminal] Ctrl+Shift+C detected, copying selection');
           event.preventDefault()
           copyTextToClipboard(selection).catch((err) => {
@@ -704,6 +732,7 @@ const Terminal: React.FC<TerminalProps> = ({
         const selection = term.getSelection()
         logger.log('✅ [Terminal] Ctrl+C detected, selection:', selection ? 'YES' : 'NO');
         if (selection) {
+          rememberTerminalSelection(selection)
           // Has selection: Copy to clipboard (works on all platforms)
           logger.log('📋 [Terminal] Copying to clipboard');
           event.preventDefault()
@@ -781,6 +810,7 @@ const Terminal: React.FC<TerminalProps> = ({
       if (enableSelectToCopyRef.current) {
         const selection = term.getSelection()
         if (selection) {
+          rememberTerminalSelection(selection)
           copyTextToClipboard(selection).catch((err) => {
             console.error('Failed to copy to clipboard:', err)
           })
@@ -804,6 +834,7 @@ const Terminal: React.FC<TerminalProps> = ({
       if (isMac && selection) {
         e.preventDefault()
         e.stopPropagation()
+        rememberTerminalSelection(selection)
         copyTextToClipboard(selection).then((success) => {
           if (success) {
             logger.log('✅ [Terminal] Context menu copied current selection')
@@ -831,10 +862,25 @@ const Terminal: React.FC<TerminalProps> = ({
 
     const terminalElement = terminalRef.current
     const handleNativeCopy = (e: ClipboardEvent) => {
-      const selection = term.getSelection()
-      if (!selection) return
+      const currentSelection = term.getSelection()
+      if (currentSelection) {
+        rememberTerminalSelection(currentSelection)
+      }
 
-      copyTextToClipboard(selection, e).catch((err) => {
+      const domSelectionText = window.getSelection?.()?.toString() || ''
+      const copyText = resolveTerminalCopyText({
+        isActive: isActiveRef.current,
+        currentSelection,
+        hasTerminalSelection: term.hasSelection(),
+        cachedSelection: selectionSnapshotRef.current,
+        cachedSelectionAgeMs: Date.now() - selectionSnapshotAtRef.current,
+        domSelectionText,
+        isEditableTarget: isEditableCopyTarget(e.target, terminalElement) || isEditableCopyTarget(document.activeElement, terminalElement),
+      })
+
+      if (!copyText) return
+
+      copyTextToClipboard(copyText, e).catch((err) => {
         console.error('Failed to handle native copy event:', err)
       })
     }
@@ -851,7 +897,7 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     terminalElement.addEventListener('contextmenu', handleContextMenu)
-    terminalElement.addEventListener('copy', handleNativeCopy, true)
+    document.addEventListener('copy', handleNativeCopy, true)
     terminalElement.addEventListener('paste', handleNativePaste, true)
 
     // Listen to window resize
@@ -871,7 +917,7 @@ const Terminal: React.FC<TerminalProps> = ({
       window.removeEventListener('resize', handleResize)
       resizeObserver.disconnect()
       terminalElement.removeEventListener('contextmenu', handleContextMenu)
-      terminalElement.removeEventListener('copy', handleNativeCopy, true)
+      document.removeEventListener('copy', handleNativeCopy, true)
       terminalElement.removeEventListener('paste', handleNativePaste, true)
       oscHandlerDisposables.forEach((disposable) => disposable.dispose())
       cleanupEvents()
@@ -887,7 +933,7 @@ const Terminal: React.FC<TerminalProps> = ({
       // React StrictMode unmount/remount preserves refs — if we reset it,
       // the guard fails and startSession runs twice, creating duplicate PTYs.
     }
-  }, [sessionId, sessionType, copyTextToClipboard, decodeOsc52Text, handleResize, openTerminalLink, readClipboardText, writeClipboardText, writePastedTextToTerminal])
+  }, [sessionId, sessionType, copyTextToClipboard, decodeOsc52Text, handleResize, openTerminalLink, readClipboardText, rememberTerminalSelection, writeClipboardText, writePastedTextToTerminal])
 
   const shouldShowServerInfo = sessionType === 'ssh' && connected
   const systemSummary = serverInfo
