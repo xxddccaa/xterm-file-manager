@@ -98,6 +98,14 @@ export function ExecuteCommand(arg1, arg2) {
   return window['go']['app']['App']['ExecuteCommand'](arg1, arg2);
 }
 
+export function GetCommandSnippets() {
+  return window['go']['app']['App']['GetCommandSnippets']();
+}
+
+export function GetCommandSnippetsConfigPath() {
+  return window['go']['app']['App']['GetCommandSnippetsConfigPath']();
+}
+
 export function GetCurrentDirectory(arg1) {
   return window['go']['app']['App']['GetCurrentDirectory'](arg1);
 }

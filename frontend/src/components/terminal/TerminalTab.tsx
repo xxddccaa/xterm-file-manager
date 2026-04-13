@@ -7,6 +7,7 @@ type SSHConfigEntry = main.SSHConfigEntry
 import { ClearSSHPasswordCache, ConnectSSH, ConnectSSHWithAuth, CreateLocalTerminalSession, GetSSHConfig, GetTerminalSettings, DisconnectSSH, DownloadFile, UploadFile, WriteToTerminal, CloseTerminalSession, OpenEditorWindow, GetHomeDirectory, SaveTerminalSessions, LoadTerminalSessions, ReadLocalFile, WriteLocalFile } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import Terminal from './Terminal'
+import CommandPanel from './CommandPanel'
 import FileManager from '../file-manager/FileManager'
 import LocalFileManager from '../file-manager/LocalFileManager'
 import { escapeShellPaths } from '../../utils/shellEscape'
@@ -65,7 +66,14 @@ interface ParsedSSHConnectError {
   message: string
 }
 
-type CollapsiblePane = 'remote' | 'local'
+type PaneKey = 'terminal' | 'commands' | 'remote' | 'local'
+type CollapsiblePane = Exclude<PaneKey, 'terminal'>
+type PaneWidths = Record<PaneKey, number>
+
+interface PaneDragState {
+  leftPane: PaneKey
+  rightPane: PaneKey
+}
 
 const SSH_PASSWORD_REQUIRED_PREFIX = 'SSH_PASSWORD_REQUIRED:'
 const SSH_PASSWORD_INVALID_PREFIX = 'SSH_PASSWORD_INVALID:'
@@ -161,17 +169,27 @@ const TerminalTab: React.FC = () => {
     enableRightClickPaste: true,
   })
   const [collapsedPanes, setCollapsedPanes] = useState<Record<CollapsiblePane, boolean>>({
+    commands: false,
     remote: false,
     local: false,
   })
   
   // Pane widths for resizable dividers
-  // Terminal gets more space (50%), file managers get less (25% each)
-  const [paneWidths, setPaneWidths] = useState<[number, number, number]>([50, 25, 25])
+  const [paneWidths, setPaneWidths] = useState<PaneWidths>({
+    terminal: 40,
+    commands: 18,
+    remote: 22,
+    local: 20,
+  })
   const containerRef = useRef<HTMLDivElement>(null)
-  const draggingRef = useRef<number | null>(null)
+  const draggingRef = useRef<PaneDragState | null>(null)
   const startXRef = useRef(0)
-  const startWidthsRef = useRef<[number, number, number]>([50, 25, 25])
+  const startWidthsRef = useRef<PaneWidths>({
+    terminal: 40,
+    commands: 18,
+    remote: 22,
+    local: 20,
+  })
   
   // Refresh triggers for file panels
   const [remoteRefreshKey, setRemoteRefreshKey] = useState(0)
@@ -774,6 +792,20 @@ const TerminalTab: React.FC = () => {
     }
   }, [])
 
+  const getTerminalPaneWidth = useCallback((sessionType: Session['type']) => {
+    if (sessionType === 'local') {
+      return paneWidths.terminal +
+        paneWidths.commands +
+        paneWidths.remote +
+        (collapsedPanes.local ? paneWidths.local : 0)
+    }
+
+    return paneWidths.terminal +
+      (collapsedPanes.commands ? paneWidths.commands : 0) +
+      (collapsedPanes.remote ? paneWidths.remote : 0) +
+      (collapsedPanes.local ? paneWidths.local : 0)
+  }, [collapsedPanes, paneWidths])
+
   const handleCloseSession = (sessionId: string) => {
     const closedSession = sessions.find(s => s.id === sessionId)
     
@@ -874,11 +906,11 @@ const TerminalTab: React.FC = () => {
   }, [tabContextMenu.sessionId, sessions])
 
   // Draggable divider logic
-  const handleMouseDown = useCallback((dividerIndex: number, e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((leftPane: PaneKey, rightPane: PaneKey, e: React.MouseEvent) => {
     e.preventDefault()
-    draggingRef.current = dividerIndex
+    draggingRef.current = { leftPane, rightPane }
     startXRef.current = e.clientX
-    startWidthsRef.current = [...paneWidths] as [number, number, number]
+    startWidthsRef.current = { ...paneWidths }
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
   }, [paneWidths])
@@ -891,19 +923,14 @@ const TerminalTab: React.FC = () => {
       const deltaX = e.clientX - startXRef.current
       const deltaPercent = (deltaX / containerWidth) * 100
 
-      const newWidths: [number, number, number] = [...startWidthsRef.current] as [number, number, number]
-      const divider = draggingRef.current
-      const minWidth = 15
+      const { leftPane, rightPane } = draggingRef.current
+      const newWidths: PaneWidths = { ...startWidthsRef.current }
+      const minWidth = 12
 
-      if (divider === 0) {
-        newWidths[0] = startWidthsRef.current[0] + deltaPercent
-        newWidths[1] = startWidthsRef.current[1] - deltaPercent
-      } else {
-        newWidths[1] = startWidthsRef.current[1] + deltaPercent
-        newWidths[2] = startWidthsRef.current[2] - deltaPercent
-      }
+      newWidths[leftPane] = startWidthsRef.current[leftPane] + deltaPercent
+      newWidths[rightPane] = startWidthsRef.current[rightPane] - deltaPercent
 
-      if (newWidths[0] >= minWidth && newWidths[1] >= minWidth && newWidths[2] >= minWidth) {
+      if (newWidths[leftPane] >= minWidth && newWidths[rightPane] >= minWidth) {
         setPaneWidths(newWidths)
       }
     }
@@ -1510,9 +1537,7 @@ const TerminalTab: React.FC = () => {
               const isActive = session.id === activeSessionId
               const sshHost = session.sshHost || session.name
               const sshConfig = sshConfigs.find(c => c.host === sshHost)
-              const terminalPaneWidth = session.type === 'ssh'
-                ? paneWidths[0] + (collapsedPanes.remote ? paneWidths[1] : 0) + (collapsedPanes.local ? paneWidths[2] : 0)
-                : paneWidths[0] + paneWidths[1] + (collapsedPanes.local ? paneWidths[2] : 0)
+              const terminalPaneWidth = getTerminalPaneWidth(session.type)
             
             // For local terminal: show Terminal + Local Files (2 panes)
             if (session.type === 'local') {
@@ -1551,14 +1576,14 @@ const TerminalTab: React.FC = () => {
                   {!collapsedPanes.local && (
                     <div 
                       className="split-divider"
-                      onMouseDown={(e) => handleMouseDown(0, e)}
+                      onMouseDown={(e) => handleMouseDown('terminal', 'local', e)}
                     />
                   )}
 
                   {/* Local Files Pane */}
                   <div 
                     className={`local-files-pane ${collapsedPanes.local ? 'pane-collapsed' : ''}`}
-                    style={getCollapsedPaneStyle(collapsedPanes.local, paneWidths[2])}
+                    style={getCollapsedPaneStyle(collapsedPanes.local, paneWidths.local)}
                   >
                     <div className={`pane-header ${collapsedPanes.local ? 'pane-header-collapsed' : ''}`}>
                       <span className={`pane-title ${collapsedPanes.local ? 'pane-title-collapsed' : ''}`}>
@@ -1589,7 +1614,7 @@ const TerminalTab: React.FC = () => {
               )
             }
             
-            // For SSH terminal: show Terminal + Remote Files + Local Files (3 panes)
+            // For SSH terminal: show Terminal + Commands + Remote Files + Local Files (4 panes)
             return (
               <div 
                 key={session.id}
@@ -1622,17 +1647,56 @@ const TerminalTab: React.FC = () => {
                 </div>
 
                 {/* Divider 1 */}
-                {!collapsedPanes.remote && (
+                {!collapsedPanes.commands && (
                   <div 
                     className="split-divider"
-                    onMouseDown={(e) => handleMouseDown(0, e)}
+                    onMouseDown={(e) => handleMouseDown('terminal', 'commands', e)}
+                  />
+                )}
+
+                {/* Command Pane */}
+                <div 
+                  className={`command-pane ${collapsedPanes.commands ? 'pane-collapsed' : ''}`}
+                  style={getCollapsedPaneStyle(collapsedPanes.commands, paneWidths.commands)}
+                >
+                  <div className={`pane-header ${collapsedPanes.commands ? 'pane-header-collapsed' : ''}`}>
+                    <span className={`pane-title ${collapsedPanes.commands ? 'pane-title-collapsed' : ''}`}>
+                      {t('terminal:commandPanelTitle')}
+                    </span>
+                    {!collapsedPanes.commands && (
+                      <span className="pane-info">{t('terminal:commandPanelInfo')}</span>
+                    )}
+                    <Button
+                      type="text"
+                      size="small"
+                      className="pane-toggle-btn"
+                      icon={collapsedPanes.commands ? <LeftOutlined /> : <RightOutlined />}
+                      title={collapsedPanes.commands ? t('common:expand') : t('common:collapse')}
+                      onClick={() => togglePane('commands')}
+                    />
+                  </div>
+                  <div className={`pane-content ${collapsedPanes.commands ? 'pane-content-hidden' : ''}`}>
+                    <CommandPanel
+                      sessionId={session.id}
+                      host={sshHost}
+                      connected={session.connected}
+                      isActive={isActive}
+                    />
+                  </div>
+                </div>
+
+                {/* Divider 2 */}
+                {!collapsedPanes.commands && !collapsedPanes.remote && (
+                  <div 
+                    className="split-divider"
+                    onMouseDown={(e) => handleMouseDown('commands', 'remote', e)}
                   />
                 )}
 
                 {/* Remote Files Pane */}
                 <div 
                   className={`file-manager-pane ${collapsedPanes.remote ? 'pane-collapsed' : ''}`}
-                  style={getCollapsedPaneStyle(collapsedPanes.remote, paneWidths[1])}
+                  style={getCollapsedPaneStyle(collapsedPanes.remote, paneWidths.remote)}
                 >
                   <div className={`pane-header ${collapsedPanes.remote ? 'pane-header-collapsed' : ''}`}>
                     <span className={`pane-title ${collapsedPanes.remote ? 'pane-title-collapsed' : ''}`}>
@@ -1673,18 +1737,18 @@ const TerminalTab: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Divider 2 */}
+                {/* Divider 3 */}
                 {!collapsedPanes.local && (
                   <div 
                     className="split-divider"
-                    onMouseDown={(e) => handleMouseDown(1, e)}
+                    onMouseDown={(e) => handleMouseDown('remote', 'local', e)}
                   />
                 )}
 
                 {/* Local Files Pane */}
                 <div 
                   className={`local-files-pane ${collapsedPanes.local ? 'pane-collapsed' : ''}`}
-                  style={getCollapsedPaneStyle(collapsedPanes.local, paneWidths[2])}
+                  style={getCollapsedPaneStyle(collapsedPanes.local, paneWidths.local)}
                 >
                   <div className={`pane-header ${collapsedPanes.local ? 'pane-header-collapsed' : ''}`}>
                     <span className={`pane-title ${collapsedPanes.local ? 'pane-title-collapsed' : ''}`}>

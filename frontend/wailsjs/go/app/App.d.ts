@@ -51,6 +51,10 @@ export function DownloadFile(arg1:string,arg2:string,arg3:string):Promise<string
 
 export function ExecuteCommand(arg1:string,arg2:string):Promise<string>;
 
+export function GetCommandSnippets():Promise<string>;
+
+export function GetCommandSnippetsConfigPath():Promise<string>;
+
 export function GetCurrentDirectory(arg1:string):Promise<string>;
 
 export function GetDebugLogPath():Promise<string>;

@@ -37,6 +37,19 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.49 - SSH Command Snippets Panel (2026-04-13)
+
+**New Features:**
+- **SSH command snippets side panel**: SSH sessions now include a dedicated Commands pane between the terminal and file managers, so frequently used ops snippets can be inserted without leaving the app.
+- **Editable snippet library with sensible defaults**: The app now seeds `command-snippets.json` in the user config directory with common tmux, Docker, log, archive, and troubleshooting commands.
+
+**Bug Fixes:**
+- **Snippet changes reload live after save**: Saving the command snippets config through the built-in editor now emits a backend event so the Commands pane refreshes immediately without restarting the app.
+- **SSH pane resizing now supports four-way layouts**: Terminal split dragging was updated from a fixed 3-pane model to named pane widths, keeping terminal, commands, remote files, and local files resizable together.
+
+**Quality Improvements:**
+- **Added snippet search and persistence tests**: New frontend and backend tests cover fuzzy search, drag reorder behavior, config seeding, and snippet sanitization.
+
 ### v2.48 - SSH Config Save Formatting & Repository Cleanup (2026-04-09)
 
 **New Features:**

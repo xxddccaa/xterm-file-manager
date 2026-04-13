@@ -347,6 +347,7 @@
 }
 
 .terminal-pane,
+.command-pane,
 .file-manager-pane,
 .local-files-pane {
   display: flex;
@@ -359,6 +360,10 @@
 
 .terminal-pane {
   background: #1e1e1e;
+}
+
+.command-pane {
+  background: #1a1d22;
 }
 
 .file-manager-pane {

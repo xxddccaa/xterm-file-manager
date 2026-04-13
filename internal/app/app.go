@@ -273,6 +273,13 @@ func (a *App) WriteLocalFile(filePath string, content string) error {
 		})
 	}
 
+	if a.ctx != nil && isCommandSnippetsConfigPath(originalPath, filePath) {
+		log.Printf("📚 Command snippets config saved, triggering reload event")
+		runtime.EventsEmit(a.ctx, "command-snippets:changed", map[string]interface{}{
+			"filePath": originalPath,
+		})
+	}
+
 	return nil
 }
 
