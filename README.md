@@ -37,6 +37,15 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.50 - macOS Terminal Renderer Stability (2026-04-13)
+
+**Bug Fixes:**
+- **macOS terminal garbled glyph fragments fixed**: Terminal sessions on macOS now use the safer DOM renderer inside Wails `WKWebView`, avoiding intermittent WebGL text corruption where random colored character shards could appear during normal terminal output.
+
+**Quality Improvements:**
+- **Renderer platform detection expanded**: Added explicit Apple platform detection so renderer selection stays predictable across macOS and future Apple WebView environments.
+- **Added renderer regression coverage**: New frontend tests verify Apple terminals use the DOM renderer while Windows and Linux keep their intended renderer behavior.
+
 ### v2.49 - SSH Command Snippets Panel (2026-04-13)
 
 **New Features:**

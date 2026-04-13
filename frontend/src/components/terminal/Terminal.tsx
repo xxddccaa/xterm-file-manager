@@ -507,8 +507,8 @@ const Terminal: React.FC<TerminalProps> = ({
     })
 
     // 6. GPU-accelerated renderer: try WebGL first, fallback to Canvas.
-    // Keep the DOM renderer for Windows local terminals because WebView2 can
-    // make the adjacent local file pane flash while GPU-backed canvases repaint.
+    // Keep the built-in DOM renderer on platforms where embedded webviews have
+    // shown rendering issues or repaint artifacts.
     if (rendererMode === 'accelerated') {
       try {
         const webglAddon = new WebglAddon()
@@ -534,7 +534,7 @@ const Terminal: React.FC<TerminalProps> = ({
         }
       }
     } else {
-      logger.log('🪟 [Terminal] Using DOM renderer for Windows local terminal to avoid local file pane flicker')
+      logger.log(`🧱 [Terminal] Using DOM renderer for ${sessionType} terminal (${navigator.platform})`)
     }
 
     fitAddon.fit()
