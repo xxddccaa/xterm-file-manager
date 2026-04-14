@@ -37,6 +37,14 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.53 - IME Native Input Path Cleanup (2026-04-14)
+
+**Bug Fixes:**
+- **macOS Chinese punctuation no longer doubles after the v2.52 fix**: The terminal now treats the native xterm/browser input path as the only source of committed punctuation and stops using any manual punctuation resend fallback, so entering a single Chinese comma or period no longer inserts two symbols.
+
+**Quality Improvements:**
+- **Deferred punctuation handling now only suppresses duplicate key events**: The macOS punctuation guard now keeps temporary state just long enough to ignore duplicate keyboard events and clears that state as soon as native terminal input arrives.
+
 ### v2.52 - IME Punctuation Duplication Fix (2026-04-14)
 
 **Bug Fixes:**

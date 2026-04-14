@@ -149,7 +149,10 @@ const Terminal: React.FC<TerminalProps> = ({
   const enableSelectToCopyRef = useRef(enableSelectToCopy)
   const enableRightClickPasteRef = useRef(enableRightClickPaste)
   const hoveredLinkUriRef = useRef<string | null>(null)
-  const deferredMacPunctuationRef = useRef<{ code: string; fallbackText: string } | null>(null)
+  const deferredMacPunctuationRef = useRef<{
+    code: string
+    fallbackText: string
+  } | null>(null)
 
   // Search bar state
   const [searchVisible, setSearchVisible] = useState(false)
@@ -624,8 +627,25 @@ const Terminal: React.FC<TerminalProps> = ({
       }
     })
 
+    const clearDeferredMacPunctuation = (reason?: string) => {
+      const pendingPunctuation = deferredMacPunctuationRef.current
+      if (!pendingPunctuation) {
+        return
+      }
+
+      if (reason) {
+        logger.log('✅ [Terminal] Clearing deferred macOS punctuation:', reason)
+      }
+
+      deferredMacPunctuationRef.current = null
+    }
+
     // Handle terminal input
     term.onData((data: string) => {
+      if (deferredMacPunctuationRef.current && data) {
+        clearDeferredMacPunctuation(`native xterm data "${data}"`)
+      }
+
       WriteToTerminal(sessionId, data).catch((err) => {
         console.error('Failed to write to terminal:', err)
       })
@@ -665,40 +685,28 @@ const Terminal: React.FC<TerminalProps> = ({
 
       return String.fromCharCode(charCode - 64)
     }
-    const clearDeferredMacPunctuation = () => {
-      deferredMacPunctuationRef.current = null
-    }
-    const writeDeferredMacPunctuation = (text: string) => {
-      clearDeferredMacPunctuation()
-      logger.log('✅ [Terminal] Forwarding macOS punctuation via keyup fallback:', text)
-      WriteToTerminal(sessionId, text).catch((err) => {
-        console.error('Failed to write deferred punctuation to terminal:', err)
-      })
-    }
     logger.log('🎯 [Terminal] Installing custom key handler, isMac:', isMac);
     
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      const pendingPunctuation = deferredMacPunctuationRef.current
+      const matchesPendingPunctuation = pendingPunctuation &&
+        event.key.length === 1 &&
+        (pendingPunctuation.code === event.code || pendingPunctuation.fallbackText === event.key)
+
+      if (matchesPendingPunctuation && event.type !== 'keydown') {
+        return false
+      }
+
       if (shouldDeferMacPunctuationToBeforeInput(isMac, event)) {
         if (event.type === 'keydown') {
           deferredMacPunctuationRef.current = {
             code: event.code,
             fallbackText: event.key,
           }
-          logger.log('🎯 [Terminal] Deferring macOS punctuation to beforeinput:', {
+          logger.log('🎯 [Terminal] Deferring macOS punctuation to native input path:', {
             key: event.key,
             code: event.code,
           })
-          return false
-        }
-
-        const pendingPunctuation = deferredMacPunctuationRef.current
-        const matchesPendingPunctuation = pendingPunctuation &&
-          (pendingPunctuation.code === event.code || pendingPunctuation.fallbackText === event.key)
-
-        if (matchesPendingPunctuation) {
-          if (event.type === 'keyup') {
-            writeDeferredMacPunctuation(pendingPunctuation.fallbackText)
-          }
           return false
         }
       }
@@ -943,11 +951,18 @@ const Terminal: React.FC<TerminalProps> = ({
         return
       }
 
-      logger.log('✅ [Terminal] macOS punctuation committed via native input path:', event.data)
-      clearDeferredMacPunctuation()
+      logger.log('✅ [Terminal] Observed macOS punctuation beforeinput:', event.data)
+    }
+    const handleDeferredMacPunctuationInput = (event: InputEvent) => {
+      const pendingPunctuation = deferredMacPunctuationRef.current
+      if (!pendingPunctuation || !isDeferredTextBeforeInput(event.inputType, event.data)) {
+        return
+      }
+
+      clearDeferredMacPunctuation(`native input "${event.data}"`)
     }
     const handleDeferredMacPunctuationBlur = () => {
-      clearDeferredMacPunctuation()
+      clearDeferredMacPunctuation('blur')
     }
     const handleNativeCopy = (e: ClipboardEvent) => {
       const currentSelection = term.getSelection()
@@ -985,6 +1000,7 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     terminalElement.addEventListener('beforeinput', handleDeferredMacPunctuationBeforeInput, true)
+    terminalElement.addEventListener('input', handleDeferredMacPunctuationInput, true)
     terminalElement.addEventListener('blur', handleDeferredMacPunctuationBlur, true)
     terminalElement.addEventListener('contextmenu', handleContextMenu)
     document.addEventListener('copy', handleNativeCopy, true)
@@ -1008,6 +1024,7 @@ const Terminal: React.FC<TerminalProps> = ({
       resizeObserver.disconnect()
       clearDeferredMacPunctuation()
       terminalElement.removeEventListener('beforeinput', handleDeferredMacPunctuationBeforeInput, true)
+      terminalElement.removeEventListener('input', handleDeferredMacPunctuationInput, true)
       terminalElement.removeEventListener('blur', handleDeferredMacPunctuationBlur, true)
       terminalElement.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('copy', handleNativeCopy, true)
