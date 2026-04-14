@@ -16,6 +16,7 @@ import { app } from '../../../wailsjs/go/models'
 import logger from '../../utils/logger'
 import { getTerminalRendererMode } from '../../utils/terminalRenderer'
 import { resolveTerminalCopyText } from './terminalCopy'
+import { isDeferredTextBeforeInput, shouldDeferMacPunctuationToBeforeInput } from './terminalIme'
 import './Terminal.css'
 
 interface TerminalProps {
@@ -46,6 +47,40 @@ const isEditableCopyTarget = (target: EventTarget | null, terminalElement: HTMLE
   }
 
   return Boolean(target.closest('[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"], [role="textbox"], .monaco-editor'))
+}
+
+const isNodeInsideTerminal = (node: Node | null, terminalElement: HTMLElement): boolean => {
+  if (!node) {
+    return false
+  }
+
+  if (node instanceof Element) {
+    return terminalElement.contains(node)
+  }
+
+  return Boolean(node.parentElement && terminalElement.contains(node.parentElement))
+}
+
+const hasExternalDomSelection = (selection: Selection | null, terminalElement: HTMLElement): boolean => {
+  if (!selection || selection.isCollapsed || !selection.toString()) {
+    return false
+  }
+
+  if (
+    isNodeInsideTerminal(selection.anchorNode, terminalElement) ||
+    isNodeInsideTerminal(selection.focusNode, terminalElement)
+  ) {
+    return false
+  }
+
+  if (selection.rangeCount > 0) {
+    const commonAncestor = selection.getRangeAt(0).commonAncestorContainer
+    if (isNodeInsideTerminal(commonAncestor, terminalElement)) {
+      return false
+    }
+  }
+
+  return true
 }
 
 const formatBytes = (bytes?: number | null): string => {
@@ -86,6 +121,8 @@ const formatUptime = (seconds?: number | null): string => {
   return `${minutes}m`
 }
 
+const formatServerInfoTitle = (label: string, value: string): string => `${label}: ${value}`
+
 const Terminal: React.FC<TerminalProps> = ({
   sessionId,
   sessionType,
@@ -112,6 +149,7 @@ const Terminal: React.FC<TerminalProps> = ({
   const enableSelectToCopyRef = useRef(enableSelectToCopy)
   const enableRightClickPasteRef = useRef(enableRightClickPaste)
   const hoveredLinkUriRef = useRef<string | null>(null)
+  const deferredMacPunctuationRef = useRef<{ code: string; fallbackText: string } | null>(null)
 
   // Search bar state
   const [searchVisible, setSearchVisible] = useState(false)
@@ -627,9 +665,44 @@ const Terminal: React.FC<TerminalProps> = ({
 
       return String.fromCharCode(charCode - 64)
     }
+    const clearDeferredMacPunctuation = () => {
+      deferredMacPunctuationRef.current = null
+    }
+    const writeDeferredMacPunctuation = (text: string, source: 'beforeinput' | 'keyup') => {
+      clearDeferredMacPunctuation()
+      logger.log(`✅ [Terminal] Forwarding macOS punctuation via ${source}:`, text)
+      WriteToTerminal(sessionId, text).catch((err) => {
+        console.error('Failed to write deferred punctuation to terminal:', err)
+      })
+    }
     logger.log('🎯 [Terminal] Installing custom key handler, isMac:', isMac);
     
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (shouldDeferMacPunctuationToBeforeInput(isMac, event)) {
+        if (event.type === 'keydown') {
+          deferredMacPunctuationRef.current = {
+            code: event.code,
+            fallbackText: event.key,
+          }
+          logger.log('🎯 [Terminal] Deferring macOS punctuation to beforeinput:', {
+            key: event.key,
+            code: event.code,
+          })
+          return false
+        }
+
+        const pendingPunctuation = deferredMacPunctuationRef.current
+        const matchesPendingPunctuation = pendingPunctuation &&
+          (pendingPunctuation.code === event.code || pendingPunctuation.fallbackText === event.key)
+
+        if (matchesPendingPunctuation) {
+          if (event.type === 'keyup') {
+            writeDeferredMacPunctuation(pendingPunctuation.fallbackText, 'keyup')
+          }
+          return false
+        }
+      }
+
       if (event.type !== 'keydown') return true
 
       // CRITICAL: Skip all processing during IME composition (Chinese/Japanese/Korean input)
@@ -807,10 +880,13 @@ const Terminal: React.FC<TerminalProps> = ({
 
     // Handle selection change for auto-copy (uses ref for latest setting)
     const handleSelectionChange = () => {
+      const selection = term.getSelection()
+      if (selection) {
+        rememberTerminalSelection(selection)
+      }
+
       if (enableSelectToCopyRef.current) {
-        const selection = term.getSelection()
         if (selection) {
-          rememberTerminalSelection(selection)
           copyTextToClipboard(selection).catch((err) => {
             console.error('Failed to copy to clipboard:', err)
           })
@@ -861,20 +937,33 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     const terminalElement = terminalRef.current
+    const handleDeferredMacPunctuationBeforeInput = (event: InputEvent) => {
+      const pendingPunctuation = deferredMacPunctuationRef.current
+      if (!pendingPunctuation || !isDeferredTextBeforeInput(event.inputType, event.data)) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      writeDeferredMacPunctuation(event.data as string, 'beforeinput')
+    }
+    const handleDeferredMacPunctuationBlur = () => {
+      clearDeferredMacPunctuation()
+    }
     const handleNativeCopy = (e: ClipboardEvent) => {
       const currentSelection = term.getSelection()
       if (currentSelection) {
         rememberTerminalSelection(currentSelection)
       }
 
-      const domSelectionText = window.getSelection?.()?.toString() || ''
+      const domSelection = window.getSelection?.() || null
       const copyText = resolveTerminalCopyText({
         isActive: isActiveRef.current,
         currentSelection,
         hasTerminalSelection: term.hasSelection(),
         cachedSelection: selectionSnapshotRef.current,
         cachedSelectionAgeMs: Date.now() - selectionSnapshotAtRef.current,
-        domSelectionText,
+        hasExternalDomSelection: hasExternalDomSelection(domSelection, terminalElement),
         isEditableTarget: isEditableCopyTarget(e.target, terminalElement) || isEditableCopyTarget(document.activeElement, terminalElement),
       })
 
@@ -896,6 +985,8 @@ const Terminal: React.FC<TerminalProps> = ({
       })
     }
 
+    terminalElement.addEventListener('beforeinput', handleDeferredMacPunctuationBeforeInput, true)
+    terminalElement.addEventListener('blur', handleDeferredMacPunctuationBlur, true)
     terminalElement.addEventListener('contextmenu', handleContextMenu)
     document.addEventListener('copy', handleNativeCopy, true)
     terminalElement.addEventListener('paste', handleNativePaste, true)
@@ -916,6 +1007,9 @@ const Terminal: React.FC<TerminalProps> = ({
       }
       window.removeEventListener('resize', handleResize)
       resizeObserver.disconnect()
+      clearDeferredMacPunctuation()
+      terminalElement.removeEventListener('beforeinput', handleDeferredMacPunctuationBeforeInput, true)
+      terminalElement.removeEventListener('blur', handleDeferredMacPunctuationBlur, true)
       terminalElement.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('copy', handleNativeCopy, true)
       terminalElement.removeEventListener('paste', handleNativePaste, true)
@@ -997,33 +1091,33 @@ const Terminal: React.FC<TerminalProps> = ({
             </div>
           ) : serverInfo ? (
             <div className="terminal-server-info-grid">
-              <div className="server-info-pill" title={systemSummary}>
-                <span className="server-info-label">{t('serverInfoSystem')}</span>
-                <span className="server-info-value">{systemSummary}</span>
+              <div className="server-info-pill" title={formatServerInfoTitle(t('serverInfoSystem'), systemSummary)}>
+                <span className="server-info-label" title={t('serverInfoSystem')}>{t('serverInfoSystem')}</span>
+                <span className="server-info-value" title={systemSummary}>{systemSummary}</span>
               </div>
-              <div className="server-info-pill" title={cpuSummary}>
-                <span className="server-info-label">{t('serverInfoCpu')}</span>
-                <span className="server-info-value">{cpuSummary}</span>
+              <div className="server-info-pill" title={formatServerInfoTitle(t('serverInfoCpu'), cpuSummary)}>
+                <span className="server-info-label" title={t('serverInfoCpu')}>{t('serverInfoCpu')}</span>
+                <span className="server-info-value" title={cpuSummary}>{cpuSummary}</span>
               </div>
-              <div className="server-info-pill" title={memorySummary}>
-                <span className="server-info-label">{t('serverInfoMemory')}</span>
-                <span className="server-info-value">{memorySummary}</span>
+              <div className="server-info-pill" title={formatServerInfoTitle(t('serverInfoMemory'), memorySummary)}>
+                <span className="server-info-label" title={t('serverInfoMemory')}>{t('serverInfoMemory')}</span>
+                <span className="server-info-value" title={memorySummary}>{memorySummary}</span>
               </div>
-              <div className="server-info-pill" title={diskSummary}>
-                <span className="server-info-label">{t('serverInfoDisk')}</span>
-                <span className="server-info-value">{diskSummary}</span>
+              <div className="server-info-pill" title={formatServerInfoTitle(t('serverInfoDisk'), diskSummary)}>
+                <span className="server-info-label" title={t('serverInfoDisk')}>{t('serverInfoDisk')}</span>
+                <span className="server-info-value" title={diskSummary}>{diskSummary}</span>
               </div>
-              <div className="server-info-pill" title={networkSummary}>
-                <span className="server-info-label">{t('serverInfoNetwork')}</span>
-                <span className="server-info-value">{networkSummary}</span>
+              <div className="server-info-pill" title={formatServerInfoTitle(t('serverInfoNetwork'), networkSummary)}>
+                <span className="server-info-label" title={t('serverInfoNetwork')}>{t('serverInfoNetwork')}</span>
+                <span className="server-info-value" title={networkSummary}>{networkSummary}</span>
               </div>
-              <div className="server-info-pill" title={loadSummary}>
-                <span className="server-info-label">{t('serverInfoLoad')}</span>
-                <span className="server-info-value">{loadSummary}</span>
+              <div className="server-info-pill" title={formatServerInfoTitle(t('serverInfoLoad'), loadSummary)}>
+                <span className="server-info-label" title={t('serverInfoLoad')}>{t('serverInfoLoad')}</span>
+                <span className="server-info-value" title={loadSummary}>{loadSummary}</span>
               </div>
-              <div className="server-info-pill" title={uptimeSummary}>
-                <span className="server-info-label">{t('serverInfoUptime')}</span>
-                <span className="server-info-value">{uptimeSummary}</span>
+              <div className="server-info-pill" title={formatServerInfoTitle(t('serverInfoUptime'), uptimeSummary)}>
+                <span className="server-info-label" title={t('serverInfoUptime')}>{t('serverInfoUptime')}</span>
+                <span className="server-info-value" title={uptimeSummary}>{uptimeSummary}</span>
               </div>
             </div>
           ) : (

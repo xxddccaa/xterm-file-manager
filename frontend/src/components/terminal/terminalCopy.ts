@@ -6,7 +6,7 @@ interface ResolveTerminalCopyTextOptions {
   hasTerminalSelection: boolean
   cachedSelection: string
   cachedSelectionAgeMs: number
-  domSelectionText?: string
+  hasExternalDomSelection?: boolean
   isEditableTarget?: boolean
 }
 
@@ -16,7 +16,7 @@ export const resolveTerminalCopyText = ({
   hasTerminalSelection,
   cachedSelection,
   cachedSelectionAgeMs,
-  domSelectionText = '',
+  hasExternalDomSelection = false,
   isEditableTarget = false,
 }: ResolveTerminalCopyTextOptions): string | null => {
   if (!isActive) {
@@ -31,7 +31,7 @@ export const resolveTerminalCopyText = ({
     return cachedSelection
   }
 
-  if (domSelectionText || isEditableTarget) {
+  if (hasExternalDomSelection || isEditableTarget) {
     return null
   }
 

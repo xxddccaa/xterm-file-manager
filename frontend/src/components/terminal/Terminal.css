@@ -115,32 +115,39 @@
 .terminal-server-info-bar {
   border-top: 1px solid #303030;
   background: linear-gradient(180deg, #181818 0%, #141414 100%);
-  padding: 8px 10px;
+  padding: 6px 8px;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .terminal-server-info-grid {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: clamp(4px, 0.6vw, 8px);
+  min-width: 0;
 }
 
 .server-info-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  flex: 1 1 220px;
-  padding: 6px 10px;
+  width: 100%;
+  padding: 5px 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 7px;
   background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
 }
 
 .server-info-label {
   color: #8a8a8a;
   font-size: 11px;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -148,6 +155,7 @@
 .server-info-value {
   color: #e3e3e3;
   font-size: 12px;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -158,6 +166,7 @@
   color: #9aa0a6;
   font-size: 12px;
   padding: 4px 2px;
+  white-space: nowrap;
 }
 
 .terminal-server-info-status-error {

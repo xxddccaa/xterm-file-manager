@@ -50,7 +50,7 @@ describe('resolveTerminalCopyText', () => {
       hasTerminalSelection: false,
       cachedSelection: 'terminal text',
       cachedSelectionAgeMs: 100,
-      domSelectionText: 'form field text',
+      hasExternalDomSelection: true,
     })).toBeNull()
   })
 

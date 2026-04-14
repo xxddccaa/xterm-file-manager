@@ -37,6 +37,17 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.51 - Terminal Input & Status Bar Fixes (2026-04-14)
+
+**Bug Fixes:**
+- **macOS Chinese punctuation now reaches terminal apps correctly**: The terminal now defers plain punctuation keys to the committed `beforeinput` text path on macOS, so Chinese IME full-width punctuation like `，。！？；：` is no longer downgraded to ASCII inside terminal apps such as `codex`.
+- **Cross-page terminal copy works again**: Long drag selections across multiple screens of scrollback now keep their cached selection snapshot in sync even when select-to-copy is disabled, restoring reliable `Cmd+C` / menu copy behavior for large terminal selections.
+- **Bottom SSH status bar stays on one line without horizontal scrolling**: The server info footer now compresses each metric into a fixed single-row layout with ellipsis and hover details instead of wrapping to two lines or forcing horizontal scroll.
+
+**Quality Improvements:**
+- **Added targeted terminal IME regression tests**: New frontend tests cover the macOS punctuation deferral rules and accepted committed-text event types for the terminal input path.
+- **Refined terminal copy fallback scope**: Native copy handling now distinguishes terminal-internal DOM selections from selections outside the terminal, so fallback copy logic stays reliable without stealing clipboard actions from editors or other controls.
+
 ### v2.50 - macOS Terminal Renderer Stability (2026-04-13)
 
 **Bug Fixes:**
