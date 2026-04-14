@@ -37,6 +37,15 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.54 - Terminal Symbol Input Reliability (2026-04-14)
+
+**Bug Fixes:**
+- **Terminal symbol input works again after the v2.53 release**: macOS punctuation keys such as `-`, `,`, `.`, `/`, and `;` are no longer swallowed by the deferred IME workaround, while Chinese full-width punctuation still commits correctly through the native input path.
+- **Chinese punctuation and ASCII punctuation now coexist safely**: The terminal now delays forwarding raw ASCII punctuation briefly and replaces it with the committed native IME character when available, preventing both missing symbols and duplicate punctuation.
+
+**Quality Improvements:**
+- **Deferred punctuation handling now distinguishes ASCII fallback from committed IME text**: The terminal tracks punctuation long enough to swap native committed text in place, but only flushes the ASCII fallback when no IME replacement arrives.
+
 ### v2.53 - IME Native Input Path Cleanup (2026-04-14)
 
 **Bug Fixes:**

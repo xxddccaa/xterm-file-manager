@@ -152,6 +152,7 @@ const Terminal: React.FC<TerminalProps> = ({
   const deferredMacPunctuationRef = useRef<{
     code: string
     fallbackText: string
+    fallbackTimer: number | null
   } | null>(null)
 
   // Search bar state
@@ -633,16 +634,46 @@ const Terminal: React.FC<TerminalProps> = ({
         return
       }
 
+      if (pendingPunctuation.fallbackTimer !== null) {
+        window.clearTimeout(pendingPunctuation.fallbackTimer)
+      }
+
       if (reason) {
         logger.log('✅ [Terminal] Clearing deferred macOS punctuation:', reason)
       }
 
       deferredMacPunctuationRef.current = null
     }
+    const flushDeferredMacPunctuation = (text: string, reason: string) => {
+      clearDeferredMacPunctuation(reason)
+      WriteToTerminal(sessionId, text).catch((err) => {
+        console.error('Failed to write deferred punctuation to terminal:', err)
+      })
+    }
+    const scheduleDeferredMacPunctuationFallback = (pendingPunctuation: { code: string; fallbackText: string; fallbackTimer: number | null }) => {
+      if (pendingPunctuation.fallbackTimer !== null) {
+        window.clearTimeout(pendingPunctuation.fallbackTimer)
+      }
+
+      pendingPunctuation.fallbackTimer = window.setTimeout(() => {
+        if (deferredMacPunctuationRef.current !== pendingPunctuation) {
+          return
+        }
+
+        logger.log('✅ [Terminal] Sending macOS punctuation fallback after native input timeout:', pendingPunctuation.fallbackText)
+        flushDeferredMacPunctuation(pendingPunctuation.fallbackText, 'fallback timeout')
+      }, 40)
+    }
 
     // Handle terminal input
     term.onData((data: string) => {
-      if (deferredMacPunctuationRef.current && data) {
+      const pendingPunctuation = deferredMacPunctuationRef.current
+      if (pendingPunctuation && data) {
+        if (data === pendingPunctuation.fallbackText) {
+          scheduleDeferredMacPunctuationFallback(pendingPunctuation)
+          return
+        }
+
         clearDeferredMacPunctuation(`native xterm data "${data}"`)
       }
 
@@ -702,12 +733,13 @@ const Terminal: React.FC<TerminalProps> = ({
           deferredMacPunctuationRef.current = {
             code: event.code,
             fallbackText: event.key,
+            fallbackTimer: null,
           }
-          logger.log('🎯 [Terminal] Deferring macOS punctuation to native input path:', {
+          logger.log('🎯 [Terminal] Tracking macOS punctuation through native input path:', {
             key: event.key,
             code: event.code,
           })
-          return false
+          return true
         }
       }
 
@@ -959,7 +991,8 @@ const Terminal: React.FC<TerminalProps> = ({
         return
       }
 
-      clearDeferredMacPunctuation(`native input "${event.data}"`)
+      logger.log('✅ [Terminal] Replacing pending macOS punctuation with native input:', event.data)
+      flushDeferredMacPunctuation(event.data as string, `native input "${event.data}"`)
     }
     const handleDeferredMacPunctuationBlur = () => {
       clearDeferredMacPunctuation('blur')
