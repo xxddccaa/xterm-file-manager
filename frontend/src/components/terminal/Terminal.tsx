@@ -668,9 +668,9 @@ const Terminal: React.FC<TerminalProps> = ({
     const clearDeferredMacPunctuation = () => {
       deferredMacPunctuationRef.current = null
     }
-    const writeDeferredMacPunctuation = (text: string, source: 'beforeinput' | 'keyup') => {
+    const writeDeferredMacPunctuation = (text: string) => {
       clearDeferredMacPunctuation()
-      logger.log(`✅ [Terminal] Forwarding macOS punctuation via ${source}:`, text)
+      logger.log('✅ [Terminal] Forwarding macOS punctuation via keyup fallback:', text)
       WriteToTerminal(sessionId, text).catch((err) => {
         console.error('Failed to write deferred punctuation to terminal:', err)
       })
@@ -697,7 +697,7 @@ const Terminal: React.FC<TerminalProps> = ({
 
         if (matchesPendingPunctuation) {
           if (event.type === 'keyup') {
-            writeDeferredMacPunctuation(pendingPunctuation.fallbackText, 'keyup')
+            writeDeferredMacPunctuation(pendingPunctuation.fallbackText)
           }
           return false
         }
@@ -943,9 +943,8 @@ const Terminal: React.FC<TerminalProps> = ({
         return
       }
 
-      event.preventDefault()
-      event.stopPropagation()
-      writeDeferredMacPunctuation(event.data as string, 'beforeinput')
+      logger.log('✅ [Terminal] macOS punctuation committed via native input path:', event.data)
+      clearDeferredMacPunctuation()
     }
     const handleDeferredMacPunctuationBlur = () => {
       clearDeferredMacPunctuation()
