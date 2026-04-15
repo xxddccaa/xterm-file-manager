@@ -1,66 +1,74 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  isDeferredTextBeforeInput,
-  shouldDeferMacPunctuationToBeforeInput,
+  getMacNativeTextInputStage,
+  shouldTrackMacNativeTextInputCandidate,
 } from './terminalIme'
 
-describe('shouldDeferMacPunctuationToBeforeInput', () => {
-  it('defers plain macOS punctuation keys to beforeinput', () => {
-    expect(shouldDeferMacPunctuationToBeforeInput(true, {
+describe('shouldTrackMacNativeTextInputCandidate', () => {
+  it('tracks plain macOS single-character keys, including punctuation and letters', () => {
+    expect(shouldTrackMacNativeTextInputCandidate(true, {
       key: ',',
       code: 'Comma',
       ctrlKey: false,
       metaKey: false,
       altKey: false,
+      isComposing: false,
+      keyCode: 188,
     })).toBe(true)
-  })
 
-  it('keeps shifted punctuation eligible so full-width variants can commit through IME', () => {
-    expect(shouldDeferMacPunctuationToBeforeInput(true, {
-      key: '?',
-      code: 'Slash',
+    expect(shouldTrackMacNativeTextInputCandidate(true, {
+      key: 'z',
+      code: 'KeyZ',
       ctrlKey: false,
       metaKey: false,
       altKey: false,
+      isComposing: false,
+      keyCode: 90,
     })).toBe(true)
   })
 
-  it('does not defer letters or modified shortcuts', () => {
-    expect(shouldDeferMacPunctuationToBeforeInput(true, {
-      key: 'a',
-      code: 'KeyA',
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-    })).toBe(false)
-
-    expect(shouldDeferMacPunctuationToBeforeInput(true, {
+  it('ignores modified shortcuts, non-mac platforms, and active composition events', () => {
+    expect(shouldTrackMacNativeTextInputCandidate(true, {
       key: ',',
       code: 'Comma',
       ctrlKey: false,
       metaKey: true,
       altKey: false,
+      isComposing: false,
+      keyCode: 188,
     })).toBe(false)
 
-    expect(shouldDeferMacPunctuationToBeforeInput(false, {
-      key: ',',
-      code: 'Comma',
+    expect(shouldTrackMacNativeTextInputCandidate(false, {
+      key: 'z',
+      code: 'KeyZ',
       ctrlKey: false,
       metaKey: false,
       altKey: false,
+      isComposing: false,
+      keyCode: 90,
+    })).toBe(false)
+
+    expect(shouldTrackMacNativeTextInputCandidate(true, {
+      key: 'z',
+      code: 'KeyZ',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      isComposing: true,
+      keyCode: 229,
     })).toBe(false)
   })
 })
 
-describe('isDeferredTextBeforeInput', () => {
-  it('accepts committed insert text events', () => {
-    expect(isDeferredTextBeforeInput('insertText', '，')).toBe(true)
-    expect(isDeferredTextBeforeInput('insertCompositionText', '。')).toBe(true)
+describe('getMacNativeTextInputStage', () => {
+  it('distinguishes between composition updates and committed text', () => {
+    expect(getMacNativeTextInputStage('insertText', '，')).toBe('commit')
+    expect(getMacNativeTextInputStage('insertCompositionText', 'z')).toBe('composition')
   })
 
   it('ignores empty or non-insert beforeinput events', () => {
-    expect(isDeferredTextBeforeInput('deleteContentBackward', null)).toBe(false)
-    expect(isDeferredTextBeforeInput('insertParagraph', '')).toBe(false)
+    expect(getMacNativeTextInputStage('deleteContentBackward', null)).toBeNull()
+    expect(getMacNativeTextInputStage('insertParagraph', '')).toBeNull()
   })
 })

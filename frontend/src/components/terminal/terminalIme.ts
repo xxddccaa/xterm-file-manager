@@ -4,23 +4,11 @@ export interface TerminalImeKeyEvent {
   ctrlKey: boolean
   metaKey: boolean
   altKey: boolean
+  isComposing?: boolean
+  keyCode?: number
 }
 
-const MAC_IME_PUNCTUATION_CODES = new Set([
-  'Backquote',
-  'Minus',
-  'Equal',
-  'BracketLeft',
-  'BracketRight',
-  'Backslash',
-  'Semicolon',
-  'Quote',
-  'Comma',
-  'Period',
-  'Slash',
-])
-
-export const shouldDeferMacPunctuationToBeforeInput = (
+export const shouldTrackMacNativeTextInputCandidate = (
   isMac: boolean,
   event: TerminalImeKeyEvent,
 ): boolean => {
@@ -28,20 +16,32 @@ export const shouldDeferMacPunctuationToBeforeInput = (
     return false
   }
 
+  if (event.isComposing || event.keyCode === 229) {
+    return false
+  }
+
   if (event.key.length !== 1) {
     return false
   }
 
-  return MAC_IME_PUNCTUATION_CODES.has(event.code)
+  return true
 }
 
-export const isDeferredTextBeforeInput = (
+export const getMacNativeTextInputStage = (
   inputType?: string | null,
   data?: string | null,
-): boolean => {
+): 'composition' | 'commit' | null => {
   if (!data) {
-    return false
+    return null
   }
 
-  return inputType === 'insertText' || inputType === 'insertCompositionText'
+  if (inputType === 'insertCompositionText') {
+    return 'composition'
+  }
+
+  if (inputType === 'insertText') {
+    return 'commit'
+  }
+
+  return null
 }

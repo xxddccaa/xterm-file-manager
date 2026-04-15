@@ -16,7 +16,7 @@ import { app } from '../../../wailsjs/go/models'
 import logger from '../../utils/logger'
 import { getTerminalRendererMode } from '../../utils/terminalRenderer'
 import { resolveTerminalCopyText } from './terminalCopy'
-import { isDeferredTextBeforeInput, shouldDeferMacPunctuationToBeforeInput } from './terminalIme'
+import { getMacNativeTextInputStage, shouldTrackMacNativeTextInputCandidate } from './terminalIme'
 import './Terminal.css'
 
 interface TerminalProps {
@@ -32,6 +32,8 @@ interface TerminalProps {
 type SSHServerInfo = app.SSHServerInfo
 
 const SERVER_INFO_REFRESH_MS = 5000
+const MAC_NATIVE_INPUT_FALLBACK_MS = 32
+const MAC_NATIVE_INPUT_COMMIT_GRACE_MS = 24
 
 const isEditableCopyTarget = (target: EventTarget | null, terminalElement: HTMLElement): boolean => {
   if (!(target instanceof Element)) {
@@ -149,10 +151,12 @@ const Terminal: React.FC<TerminalProps> = ({
   const enableSelectToCopyRef = useRef(enableSelectToCopy)
   const enableRightClickPasteRef = useRef(enableRightClickPaste)
   const hoveredLinkUriRef = useRef<string | null>(null)
-  const deferredMacPunctuationRef = useRef<{
+  const pendingMacNativeTextInputRef = useRef<{
     code: string
     fallbackText: string
     fallbackTimer: number | null
+    sawComposition: boolean
+    commitText: string | null
   } | null>(null)
 
   // Search bar state
@@ -628,53 +632,113 @@ const Terminal: React.FC<TerminalProps> = ({
       }
     })
 
-    const clearDeferredMacPunctuation = (reason?: string) => {
-      const pendingPunctuation = deferredMacPunctuationRef.current
-      if (!pendingPunctuation) {
+    const clearPendingMacNativeTextInput = (reason?: string) => {
+      const pendingTextInput = pendingMacNativeTextInputRef.current
+      if (!pendingTextInput) {
         return
       }
 
-      if (pendingPunctuation.fallbackTimer !== null) {
-        window.clearTimeout(pendingPunctuation.fallbackTimer)
+      if (pendingTextInput.fallbackTimer !== null) {
+        window.clearTimeout(pendingTextInput.fallbackTimer)
       }
 
       if (reason) {
-        logger.log('✅ [Terminal] Clearing deferred macOS punctuation:', reason)
+        logger.log('✅ [Terminal] Clearing pending macOS native text input:', reason)
       }
 
-      deferredMacPunctuationRef.current = null
+      pendingMacNativeTextInputRef.current = null
     }
-    const flushDeferredMacPunctuation = (text: string, reason: string) => {
-      clearDeferredMacPunctuation(reason)
+    const flushPendingMacNativeTextInput = (text: string, reason: string) => {
+      clearPendingMacNativeTextInput(reason)
       WriteToTerminal(sessionId, text).catch((err) => {
-        console.error('Failed to write deferred punctuation to terminal:', err)
+        console.error('Failed to write deferred native text input to terminal:', err)
       })
     }
-    const scheduleDeferredMacPunctuationFallback = (pendingPunctuation: { code: string; fallbackText: string; fallbackTimer: number | null }) => {
-      if (pendingPunctuation.fallbackTimer !== null) {
-        window.clearTimeout(pendingPunctuation.fallbackTimer)
+    const schedulePendingMacNativeTextInputFallback = (pendingTextInput: {
+      code: string
+      fallbackText: string
+      fallbackTimer: number | null
+      sawComposition: boolean
+      commitText: string | null
+    }) => {
+      if (pendingTextInput.sawComposition) {
+        return
       }
 
-      pendingPunctuation.fallbackTimer = window.setTimeout(() => {
-        if (deferredMacPunctuationRef.current !== pendingPunctuation) {
+      if (pendingTextInput.fallbackTimer !== null) {
+        window.clearTimeout(pendingTextInput.fallbackTimer)
+      }
+
+      pendingTextInput.fallbackTimer = window.setTimeout(() => {
+        if (pendingMacNativeTextInputRef.current !== pendingTextInput || pendingTextInput.sawComposition) {
           return
         }
 
-        logger.log('✅ [Terminal] Sending macOS punctuation fallback after native input timeout:', pendingPunctuation.fallbackText)
-        flushDeferredMacPunctuation(pendingPunctuation.fallbackText, 'fallback timeout')
-      }, 40)
+        logger.log('✅ [Terminal] Sending macOS native text fallback after timeout:', pendingTextInput.fallbackText)
+        flushPendingMacNativeTextInput(pendingTextInput.fallbackText, 'fallback timeout')
+      }, MAC_NATIVE_INPUT_FALLBACK_MS)
+    }
+    const markPendingMacNativeTextComposition = (source: string, data?: string | null) => {
+      const pendingTextInput = pendingMacNativeTextInputRef.current
+      if (!pendingTextInput || pendingTextInput.sawComposition) {
+        return
+      }
+
+      if (pendingTextInput.fallbackTimer !== null) {
+        window.clearTimeout(pendingTextInput.fallbackTimer)
+      }
+
+      pendingTextInput.fallbackTimer = null
+      pendingTextInput.sawComposition = true
+      logger.log('🎯 [Terminal] Holding macOS native text input for IME composition:', {
+        source,
+        fallbackText: pendingTextInput.fallbackText,
+        data: data || '',
+      })
+    }
+    const schedulePendingMacNativeTextCommitResolution = (reason: string) => {
+      const pendingTextInput = pendingMacNativeTextInputRef.current
+      if (!pendingTextInput || !pendingTextInput.sawComposition) {
+        return
+      }
+
+      if (pendingTextInput.fallbackTimer !== null) {
+        window.clearTimeout(pendingTextInput.fallbackTimer)
+      }
+
+      pendingTextInput.fallbackTimer = window.setTimeout(() => {
+        if (pendingMacNativeTextInputRef.current !== pendingTextInput) {
+          return
+        }
+
+        if (pendingTextInput.commitText) {
+          logger.log('✅ [Terminal] Using native committed text after composition:', pendingTextInput.commitText)
+          flushPendingMacNativeTextInput(pendingTextInput.commitText, reason)
+          return
+        }
+
+        clearPendingMacNativeTextInput(reason)
+      }, MAC_NATIVE_INPUT_COMMIT_GRACE_MS)
     }
 
     // Handle terminal input
     term.onData((data: string) => {
-      const pendingPunctuation = deferredMacPunctuationRef.current
-      if (pendingPunctuation && data) {
-        if (data === pendingPunctuation.fallbackText) {
-          scheduleDeferredMacPunctuationFallback(pendingPunctuation)
-          return
+      const pendingTextInput = pendingMacNativeTextInputRef.current
+      if (pendingTextInput && data) {
+        if (data === pendingTextInput.fallbackText) {
+          if (pendingTextInput.sawComposition) {
+            if (pendingTextInput.commitText !== data) {
+              return
+            }
+
+            clearPendingMacNativeTextInput(`native xterm committed text "${data}"`)
+          } else {
+            schedulePendingMacNativeTextInputFallback(pendingTextInput)
+            return
+          }
         }
 
-        clearDeferredMacPunctuation(`native xterm data "${data}"`)
+        clearPendingMacNativeTextInput(`native xterm data "${data}"`)
       }
 
       WriteToTerminal(sessionId, data).catch((err) => {
@@ -716,30 +780,30 @@ const Terminal: React.FC<TerminalProps> = ({
 
       return String.fromCharCode(charCode - 64)
     }
-    logger.log('🎯 [Terminal] Installing custom key handler, isMac:', isMac);
+    logger.log('🎯 [Terminal] Installing custom key handler, isMac:', isMac)
     
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-      const pendingPunctuation = deferredMacPunctuationRef.current
-      const matchesPendingPunctuation = pendingPunctuation &&
-        event.key.length === 1 &&
-        (pendingPunctuation.code === event.code || pendingPunctuation.fallbackText === event.key)
+      if (event.type === 'keydown' && shouldTrackMacNativeTextInputCandidate(isMac, event)) {
+        const pendingTextInput = pendingMacNativeTextInputRef.current
+        if (pendingTextInput && !pendingTextInput.sawComposition) {
+          flushPendingMacNativeTextInput(
+            pendingTextInput.fallbackText,
+            `superseded by keydown "${event.key}"`,
+          )
+        }
 
-      if (matchesPendingPunctuation && event.type !== 'keydown') {
-        return false
-      }
-
-      if (shouldDeferMacPunctuationToBeforeInput(isMac, event)) {
-        if (event.type === 'keydown') {
-          deferredMacPunctuationRef.current = {
+        if (!pendingMacNativeTextInputRef.current) {
+          pendingMacNativeTextInputRef.current = {
             code: event.code,
             fallbackText: event.key,
             fallbackTimer: null,
+            sawComposition: false,
+            commitText: null,
           }
-          logger.log('🎯 [Terminal] Tracking macOS punctuation through native input path:', {
+          logger.log('🎯 [Terminal] Tracking macOS native text candidate:', {
             key: event.key,
             code: event.code,
           })
-          return true
         }
       }
 
@@ -977,25 +1041,56 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     const terminalElement = terminalRef.current
-    const handleDeferredMacPunctuationBeforeInput = (event: InputEvent) => {
-      const pendingPunctuation = deferredMacPunctuationRef.current
-      if (!pendingPunctuation || !isDeferredTextBeforeInput(event.inputType, event.data)) {
+    const handlePendingMacNativeTextCompositionStart = () => {
+      markPendingMacNativeTextComposition('compositionstart')
+    }
+    const handlePendingMacNativeTextCompositionEnd = () => {
+      schedulePendingMacNativeTextCommitResolution('composition ended without committed xterm data')
+    }
+    const handlePendingMacNativeTextBeforeInput = (event: InputEvent) => {
+      const pendingTextInput = pendingMacNativeTextInputRef.current
+      if (!pendingTextInput) {
         return
       }
 
-      logger.log('✅ [Terminal] Observed macOS punctuation beforeinput:', event.data)
-    }
-    const handleDeferredMacPunctuationInput = (event: InputEvent) => {
-      const pendingPunctuation = deferredMacPunctuationRef.current
-      if (!pendingPunctuation || !isDeferredTextBeforeInput(event.inputType, event.data)) {
+      const inputStage = getMacNativeTextInputStage(event.inputType, event.data)
+      if (inputStage === 'composition') {
+        markPendingMacNativeTextComposition('beforeinput', event.data)
         return
       }
 
-      logger.log('✅ [Terminal] Replacing pending macOS punctuation with native input:', event.data)
-      flushDeferredMacPunctuation(event.data as string, `native input "${event.data}"`)
+      if (inputStage === 'commit') {
+        logger.log('✅ [Terminal] Observed committed macOS native text beforeinput:', event.data)
+      }
     }
-    const handleDeferredMacPunctuationBlur = () => {
-      clearDeferredMacPunctuation('blur')
+    const handlePendingMacNativeTextInput = (event: InputEvent) => {
+      const pendingTextInput = pendingMacNativeTextInputRef.current
+      if (!pendingTextInput) {
+        return
+      }
+
+      const inputStage = getMacNativeTextInputStage(event.inputType, event.data)
+      if (inputStage === 'composition') {
+        markPendingMacNativeTextComposition('input', event.data)
+        return
+      }
+
+      if (inputStage !== 'commit') {
+        return
+      }
+
+      if (pendingTextInput.sawComposition) {
+        pendingTextInput.commitText = event.data as string
+        logger.log('✅ [Terminal] Waiting for xterm commit after macOS IME input:', event.data)
+        schedulePendingMacNativeTextCommitResolution(`native committed text "${event.data}"`)
+        return
+      }
+
+      logger.log('✅ [Terminal] Replacing pending macOS native text with native input:', event.data)
+      flushPendingMacNativeTextInput(event.data as string, `native input "${event.data}"`)
+    }
+    const handlePendingMacNativeTextBlur = () => {
+      clearPendingMacNativeTextInput('blur')
     }
     const handleNativeCopy = (e: ClipboardEvent) => {
       const currentSelection = term.getSelection()
@@ -1032,9 +1127,11 @@ const Terminal: React.FC<TerminalProps> = ({
       })
     }
 
-    terminalElement.addEventListener('beforeinput', handleDeferredMacPunctuationBeforeInput, true)
-    terminalElement.addEventListener('input', handleDeferredMacPunctuationInput, true)
-    terminalElement.addEventListener('blur', handleDeferredMacPunctuationBlur, true)
+    terminalElement.addEventListener('compositionstart', handlePendingMacNativeTextCompositionStart, true)
+    terminalElement.addEventListener('compositionend', handlePendingMacNativeTextCompositionEnd, true)
+    terminalElement.addEventListener('beforeinput', handlePendingMacNativeTextBeforeInput, true)
+    terminalElement.addEventListener('input', handlePendingMacNativeTextInput, true)
+    terminalElement.addEventListener('blur', handlePendingMacNativeTextBlur, true)
     terminalElement.addEventListener('contextmenu', handleContextMenu)
     document.addEventListener('copy', handleNativeCopy, true)
     terminalElement.addEventListener('paste', handleNativePaste, true)
@@ -1055,10 +1152,12 @@ const Terminal: React.FC<TerminalProps> = ({
       }
       window.removeEventListener('resize', handleResize)
       resizeObserver.disconnect()
-      clearDeferredMacPunctuation()
-      terminalElement.removeEventListener('beforeinput', handleDeferredMacPunctuationBeforeInput, true)
-      terminalElement.removeEventListener('input', handleDeferredMacPunctuationInput, true)
-      terminalElement.removeEventListener('blur', handleDeferredMacPunctuationBlur, true)
+      clearPendingMacNativeTextInput()
+      terminalElement.removeEventListener('compositionstart', handlePendingMacNativeTextCompositionStart, true)
+      terminalElement.removeEventListener('compositionend', handlePendingMacNativeTextCompositionEnd, true)
+      terminalElement.removeEventListener('beforeinput', handlePendingMacNativeTextBeforeInput, true)
+      terminalElement.removeEventListener('input', handlePendingMacNativeTextInput, true)
+      terminalElement.removeEventListener('blur', handlePendingMacNativeTextBlur, true)
       terminalElement.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('copy', handleNativeCopy, true)
       terminalElement.removeEventListener('paste', handleNativePaste, true)

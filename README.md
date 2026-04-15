@@ -37,6 +37,16 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.55 - IME Composition Transition Fix (2026-04-15)
+
+**Bug Fixes:**
+- **Switching from symbol input to Chinese no longer leaks a Latin preedit letter**: On macOS, after typing a plain symbol or ASCII key and then entering Chinese like `子`, the terminal now waits for the IME composition to resolve instead of forwarding the transient letter first, so `z子` no longer appears.
+- **Chinese input stays correct when moving between ASCII symbols and pinyin composition**: The terminal now handles plain letters and punctuation through the same native-input tracking path, preventing both missing symbols and stray leading letters during IME transitions.
+
+**Quality Improvements:**
+- **Deferred native text handling now distinguishes composition from committed text**: The terminal listens to `compositionstart` / `compositionend` together with `beforeinput` / `input` so ASCII fallback is only flushed when no committed IME text arrives.
+- **Expanded IME regression tests beyond punctuation-only cases**: Frontend coverage now checks macOS single-character candidate tracking for both letters and symbols plus committed/composition stage detection.
+
 ### v2.54 - Terminal Symbol Input Reliability (2026-04-14)
 
 **Bug Fixes:**
