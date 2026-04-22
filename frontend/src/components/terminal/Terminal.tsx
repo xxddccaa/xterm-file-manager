@@ -17,10 +17,12 @@ import logger from '../../utils/logger'
 import { getTerminalRendererMode } from '../../utils/terminalRenderer'
 import { resolveTerminalCopyText } from './terminalCopy'
 import { getMacNativeTextInputStage, shouldTrackMacNativeTextInputCandidate } from './terminalIme'
+import { appendTerminalHistory, getTerminalHistory } from './terminalHistory'
 import './Terminal.css'
 
 interface TerminalProps {
   sessionId: string
+  historyKey: string
   sessionType: 'ssh' | 'local'
   isActive: boolean
   connected?: boolean
@@ -127,6 +129,7 @@ const formatServerInfoTitle = (label: string, value: string): string => `${label
 
 const Terminal: React.FC<TerminalProps> = ({
   sessionId,
+  historyKey,
   sessionType,
   isActive,
   connected = true,
@@ -616,11 +619,10 @@ const Terminal: React.FC<TerminalProps> = ({
       }
     }
 
-    startSession()
-
     // Listen for terminal output
     const cleanupEvents = EventsOn('terminal:output', (payload: any) => {
       if (payload && payload.sessionId === sessionId && payload.data) {
+        appendTerminalHistory(historyKey, payload.data)
         term.write(payload.data)
       }
     })
@@ -628,9 +630,25 @@ const Terminal: React.FC<TerminalProps> = ({
     // Listen for terminal disconnection
     const cleanupDisconnect = EventsOn('terminal:disconnected', (payload: any) => {
       if (payload && payload.sessionId === sessionId) {
-        term.writeln('\r\n\x1b[31m[Session disconnected: ' + (payload.reason || 'Unknown reason') + ']\x1b[0m')
+        const disconnectMessage = '\r\n\x1b[31m[Session disconnected: ' + (payload.reason || 'Unknown reason') + ']\x1b[0m\r\n'
+        appendTerminalHistory(historyKey, disconnectMessage)
+        term.write(disconnectMessage)
       }
     })
+
+    const replayHistoryAndStartSession = () => {
+      const history = getTerminalHistory(historyKey)
+      if (history) {
+        term.write(history, () => {
+          void startSession()
+        })
+        return
+      }
+
+      void startSession()
+    }
+
+    replayHistoryAndStartSession()
 
     const clearPendingMacNativeTextInput = (reason?: string) => {
       const pendingTextInput = pendingMacNativeTextInputRef.current
@@ -1175,7 +1193,7 @@ const Terminal: React.FC<TerminalProps> = ({
       // React StrictMode unmount/remount preserves refs — if we reset it,
       // the guard fails and startSession runs twice, creating duplicate PTYs.
     }
-  }, [sessionId, sessionType, copyTextToClipboard, decodeOsc52Text, handleResize, openTerminalLink, readClipboardText, rememberTerminalSelection, writeClipboardText, writePastedTextToTerminal])
+  }, [historyKey, sessionId, sessionType, copyTextToClipboard, decodeOsc52Text, handleResize, openTerminalLink, readClipboardText, rememberTerminalSelection, writeClipboardText, writePastedTextToTerminal])
 
   const shouldShowServerInfo = sessionType === 'ssh' && connected
   const systemSummary = serverInfo

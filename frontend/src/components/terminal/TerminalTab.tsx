@@ -14,11 +14,13 @@ import { escapeShellPaths } from '../../utils/shellEscape'
 import { getDragPayload, clearDragPayload, setDragTarget, clearDragTarget, getDragTarget } from '../../utils/dragState'
 import { dlog } from '../../utils/debugLog'
 import { haveSameSSHConfigOrder, reorderSSHConfigContent, reorderSSHConfigsByVisibleHosts, sortSSHConfigsByName } from '../../utils/sshConfigOrdering'
+import { clearTerminalHistory } from './terminalHistory'
 import './TerminalTab.css'
 
 const { Sider, Content } = Layout
 
 interface Session {
+  tabId: string
   id: string
   name: string
   customName?: string  // User-defined custom name (if renamed)
@@ -29,6 +31,7 @@ interface Session {
 }
 
 interface PersistedSession {
+  tabId?: string
   id: string
   name: string
   customName?: string
@@ -79,6 +82,8 @@ const SSH_PASSWORD_REQUIRED_PREFIX = 'SSH_PASSWORD_REQUIRED:'
 const SSH_PASSWORD_INVALID_PREFIX = 'SSH_PASSWORD_INVALID:'
 const SSH_KEY_PASSPHRASE_REQUIRED_PREFIX = 'SSH_KEY_PASSPHRASE_REQUIRED:'
 const SSH_KEY_PASSPHRASE_INVALID_PREFIX = 'SSH_KEY_PASSPHRASE_INVALID:'
+
+const createTabId = (): string => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
 const parseErrorPayload = (payload: string, expectedParts: number): string[] => {
   const parts = payload.split('|')
@@ -299,6 +304,7 @@ const TerminalTab: React.FC = () => {
     try {
       const data = {
         sessions: nextSessions.map(s => ({
+          tabId: s.tabId,
           // Persist a stable id for sessions that haven't connected yet
           id: s.id,
           name: s.name,
@@ -375,7 +381,9 @@ const TerminalTab: React.FC = () => {
       // Restore tabs ONLY (do not connect yet). Use stable ids so we can map to real ids later.
       const restored: Session[] = (data.sessions as PersistedSession[]).map((s, idx) => {
         const stableId = s.id && typeof s.id === 'string' ? s.id : `restored-${idx}-${Date.now()}`
+        const tabId = s.tabId && typeof s.tabId === 'string' ? s.tabId : stableId
         return {
+          tabId,
           id: stableId,
           name: s.name,
           customName: s.customName,
@@ -400,6 +408,10 @@ const TerminalTab: React.FC = () => {
 
   const removeSessionPlaceholder = useCallback((sessionId: string) => {
     setSessions(prev => {
+      const removedSession = prev.find(s => s.id === sessionId)
+      if (removedSession) {
+        clearTerminalHistory(removedSession.tabId)
+      }
       const remaining = prev.filter(s => s.id !== sessionId)
       setActiveSessionId(current => current === sessionId ? (remaining.length > 0 ? remaining[0].id : null) : current)
       return remaining
@@ -561,6 +573,7 @@ const TerminalTab: React.FC = () => {
     try {
       // Add a pending session first
       const pendingSession: Session = {
+        tabId: createTabId(),
         id: tempSessionId,
         name: config.host,
         connected: false,
@@ -684,6 +697,7 @@ const TerminalTab: React.FC = () => {
       }
       
       const newSession: Session = {
+        tabId: createTabId(),
         id: sessionId,
         name: t('terminal:localTerminal'),
         connected: true,
@@ -716,6 +730,7 @@ const TerminalTab: React.FC = () => {
       // Create local terminal session
       const sessionId = await CreateLocalTerminalSession()
       const newSession: Session = {
+        tabId: createTabId(),
         id: sessionId,
         name: `Terminal - ${dirPath.split('/').pop() || 'Local'}`,
         connected: true,
@@ -829,6 +844,10 @@ const TerminalTab: React.FC = () => {
     setSessions(remainingSessions)
     setActiveSessionId(nextActiveSessionId)
     persistSessions(remainingSessions, nextActiveSessionId)
+
+    if (closedSession) {
+      clearTerminalHistory(closedSession.tabId)
+    }
   }
 
   // --- Tab context menu handlers ---
@@ -870,6 +889,7 @@ const TerminalTab: React.FC = () => {
     setSessions(remaining)
     setActiveSessionId(nextActive)
     persistSessions(remaining, nextActive)
+    toClose.forEach(s => clearTerminalHistory(s.tabId))
   }, [sessions, activeSessionId, persistSessions])
 
   const handleCloseCurrentTab = useCallback(() => {
@@ -1482,7 +1502,7 @@ const TerminalTab: React.FC = () => {
           <div className="session-tabs">
             {sessions.map((session, index) => (
               <div
-                key={session.id}
+                key={session.tabId}
                 className={`session-tab ${activeSessionId === session.id ? 'active' : ''}`}
                 draggable={true}
                 onDragStart={(e) => handleTabDragStart(e, index)}
@@ -1543,7 +1563,7 @@ const TerminalTab: React.FC = () => {
             if (session.type === 'local') {
               return (
                 <div 
-                  key={session.id}
+                  key={session.tabId}
                   className={`session-split-pane ${isActive ? 'session-active' : ''}`}
                 >
                   {/* Terminal Pane */}
@@ -1562,6 +1582,7 @@ const TerminalTab: React.FC = () => {
                     <div className="pane-content">
                       <Terminal
                         sessionId={session.id}
+                        historyKey={session.tabId}
                         sessionType={session.type}
                         isActive={isActive}
                         connected={session.connected}
@@ -1617,7 +1638,7 @@ const TerminalTab: React.FC = () => {
             // For SSH terminal: show Terminal + Commands + Remote Files + Local Files (4 panes)
             return (
               <div 
-                key={session.id}
+                key={session.tabId}
                 className={`session-split-pane ${isActive ? 'session-active' : ''}`}
               >
                 {/* Terminal Pane */}
@@ -1636,6 +1657,7 @@ const TerminalTab: React.FC = () => {
                    <div className="pane-content">
                      <Terminal
                        sessionId={session.id}
+                       historyKey={session.tabId}
                        sessionType={session.type}
                        isActive={isActive}
                        connected={session.connected}

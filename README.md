@@ -37,6 +37,16 @@ A modern, lightweight SSH terminal with integrated file manager. Built with Go (
 
 ## Changelog
 
+### v2.56 - Terminal History Retention on Reconnect (2026-04-22)
+
+**Bug Fixes:**
+- **Same-tab terminal reconnects no longer start from a blank screen**: When an SSH terminal disconnects and reconnects in the same tab, the previous scrollback is replayed before the new session starts, so users can still see the earlier command/output context.
+- **Local terminal restarts keep prior output visible in the same tab**: Reopening a local shell in an existing tab now preserves the tab's earlier terminal history instead of discarding it as soon as the PTY is recreated.
+
+**Quality Improvements:**
+- **Terminal history is now tracked per tab instead of per backend session id**: Tabs keep a stable frontend history key even when the underlying SSH/local session id changes during reconnect.
+- **Added terminal history retention regression tests**: New frontend coverage verifies history append, isolation, and cleanup behavior for tab-scoped terminal history.
+
 ### v2.55 - IME Composition Transition Fix (2026-04-15)
 
 **Bug Fixes:**
